@@ -1,21 +1,29 @@
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
+/**
+ * CoTalk 服务端 Step 0 空壳。
+ *
+ * <p>只搭界面骨架：房间、在线成员、日志、启动/停止、广播输入。
+ * 网络与 SQLite 将在 Step 3–4 接入；AI 在 Step 10 预留。</p>
+ */
 public class CoTalkServer extends JFrame {
-    private JTextField inputField;
-    private JTextArea displayArea;
-    private JButton sendButton;
 
-    private ServerSocket serverSocket;
-    private Socket socket;
-    private BufferedReader reader;
-    private PrintWriter writer;
+    private final JLabel statusLabel = new JLabel("未启动");
+    private final JLabel roomLabel = new JLabel("CoTalk 大厅");
+    private final JLabel storageLabel = new JLabel("未连接");
+    private final JLabel aiLabel = new JLabel("未启用（预留）");
+    private final DefaultListModel<String> memberModel = new DefaultListModel<>();
+    private final JTextArea logArea = new JTextArea();
+    private final JTextField broadcastField = new JTextField(30);
+    private final JButton startButton = new JButton("启动服务");
+    private final JButton stopButton = new JButton("停止服务");
+    private final JButton broadcastButton = new JButton("广播");
+
+    private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
 
     public CoTalkServer() {
         try {
@@ -24,134 +32,182 @@ public class CoTalkServer extends JFrame {
             e.printStackTrace();
         }
 
-        setTitle("聊天服务器");
-        setSize(960, 540);
+        setTitle("CoTalk 服务器");
+        setSize(980, 620);
+        setMinimumSize(new Dimension(820, 520));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        Font globalFont = new Font("微软雅黑", Font.PLAIN, 16);
-        Font buttonFont = new Font("微软雅黑", Font.BOLD, 16);
+        Font baseFont = new Font("微软雅黑", Font.PLAIN, 15);
+        Font boldFont = new Font("微软雅黑", Font.BOLD, 15);
+        Font titleFont = new Font("微软雅黑", Font.BOLD, 22);
 
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 15));
-        topPanel.setBackground(new Color(245, 247, 250));
-        topPanel.setOpaque(true);
-        topPanel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 220, 220)));
+        add(buildHeader(titleFont, boldFont), BorderLayout.NORTH);
+        add(buildCenter(baseFont, boldFont), BorderLayout.CENTER);
+        add(buildFooter(baseFont, boldFont), BorderLayout.SOUTH);
 
-        inputField = new JTextField(30);
-        inputField.setFont(globalFont);
-        inputField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1, true),
-                new EmptyBorder(8, 10, 8, 10)
+        bindActions();
+        appendLog("Step 0：界面骨架已就绪。");
+        appendLog("网络与 SQLite 将在 Step 3–4 接入；AI 在 Step 10 预留。");
+    }
+
+    private JPanel buildHeader(Font titleFont, Font boldFont) {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(new Color(0x66CCFF));
+        header.setBorder(new EmptyBorder(12, 18, 12, 18));
+
+        JLabel title = new JLabel("CoTalk 服务器");
+        title.setFont(titleFont);
+        title.setForeground(Color.BLACK);
+
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        right.setOpaque(false);
+
+        statusLabel.setFont(boldFont);
+        statusLabel.setForeground(Color.BLACK);
+
+        styleButton(startButton, boldFont);
+        styleButton(stopButton, boldFont);
+        startButton.setPreferredSize(new Dimension(110, 36));
+        stopButton.setPreferredSize(new Dimension(110, 36));
+
+        JLabel portLabel = new JLabel("端口 4700");
+        portLabel.setFont(boldFont);
+        portLabel.setForeground(Color.BLACK);
+
+        right.add(statusLabel);
+        right.add(portLabel);
+        right.add(startButton);
+        right.add(stopButton);
+
+        header.add(title, BorderLayout.WEST);
+        header.add(right, BorderLayout.EAST);
+        return header;
+    }
+
+    private JSplitPane buildCenter(Font baseFont, Font boldFont) {
+        JPanel left = new JPanel(new BorderLayout(0, 10));
+        left.setBorder(new EmptyBorder(16, 16, 16, 8));
+        left.setBackground(new Color(0xF5F5F5));
+
+        JPanel info = new JPanel(new GridLayout(4, 2, 8, 8));
+        info.setOpaque(false);
+        info.setBorder(BorderFactory.createTitledBorder("房间信息"));
+        info.add(label("房间", boldFont));
+        info.add(roomLabel);
+        info.add(label("状态", boldFont));
+        info.add(statusLabelMirror());
+        info.add(label("存储", boldFont));
+        info.add(storageLabel);
+        info.add(label("AI", boldFont));
+        info.add(aiLabel);
+
+        JList<String> memberList = new JList<>(memberModel);
+        memberList.setFont(baseFont);
+        memberList.setFixedCellHeight(36);
+        memberList.setBackground(Color.WHITE);
+        memberModel.addElement("（暂无在线成员）");
+        JScrollPane memberScroll = new JScrollPane(memberList);
+        memberScroll.setBorder(BorderFactory.createTitledBorder("在线成员"));
+
+        left.add(info, BorderLayout.NORTH);
+        left.add(memberScroll, BorderLayout.CENTER);
+
+        logArea.setEditable(false);
+        logArea.setFont(new Font("Consolas", Font.PLAIN, 14));
+        logArea.setBackground(Color.WHITE);
+        logArea.setForeground(new Color(0x333333));
+        logArea.setMargin(new Insets(10, 10, 10, 10));
+        logArea.setLineWrap(true);
+        logArea.setWrapStyleWord(true);
+        JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll.setBorder(BorderFactory.createTitledBorder("服务器日志"));
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, logScroll);
+        splitPane.setDividerLocation(360);
+        splitPane.setResizeWeight(0.0);
+        splitPane.setBorder(new EmptyBorder(10, 10, 0, 10));
+        return splitPane;
+    }
+
+    private JPanel buildFooter(Font baseFont, Font boldFont) {
+        JPanel footer = new JPanel(new BorderLayout(10, 0));
+        footer.setBorder(new EmptyBorder(10, 16, 14, 16));
+        footer.setBackground(new Color(0xF5F5F5));
+
+        JLabel label = new JLabel("广播消息");
+        label.setFont(boldFont);
+        broadcastField.setFont(baseFont);
+        broadcastField.setPreferredSize(new Dimension(200, 38));
+        styleButton(broadcastButton, boldFont);
+        broadcastButton.setPreferredSize(new Dimension(90, 38));
+
+        footer.add(label, BorderLayout.WEST);
+        footer.add(broadcastField, BorderLayout.CENTER);
+        footer.add(broadcastButton, BorderLayout.EAST);
+        return footer;
+    }
+
+    private JLabel label(String text, Font font) {
+        JLabel label = new JLabel(text);
+        label.setFont(font);
+        return label;
+    }
+
+    private JLabel statusLabelMirror() {
+        JLabel label = new JLabel(statusLabel.getText());
+        label.setFont(statusLabel.getFont());
+        statusLabel.addPropertyChangeListener("text", evt -> label.setText(statusLabel.getText()));
+        return label;
+    }
+
+    private void styleButton(JButton button, Font font) {
+        button.setFont(font);
+        button.setBackground(new Color(0x66CCFF));
+        button.setForeground(Color.BLACK);
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(0x33B5E5), 1, true),
+                new EmptyBorder(6, 12, 6, 12)
         ));
+        button.setOpaque(true);
+    }
 
-        sendButton = new JButton("发送");
-        sendButton.setFont(buttonFont);
-        sendButton.setBackground(new Color(0, 122, 255)); // 现代蓝
-        sendButton.setForeground(Color.WHITE);
-        sendButton.setFocusPainted(false);
-        sendButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        sendButton.setPreferredSize(new Dimension(100, 40));
-        sendButton.setUI(new javax.swing.plaf.basic.BasicButtonUI());
-        sendButton.setBorderPainted(false);
-        sendButton.setContentAreaFilled(true);
-        sendButton.setOpaque(true);
-
-        topPanel.add(inputField);
-        topPanel.add(sendButton);
-
-        displayArea = new JTextArea();
-        displayArea.setEditable(false);
-        displayArea.setFont(globalFont);
-        displayArea.setBackground(new Color(252, 252, 252));
-        displayArea.setForeground(new Color(51, 51, 51));
-        displayArea.setMargin(new Insets(15, 15, 15, 15));
-        displayArea.setLineWrap(true);
-
-        JScrollPane scrollPane = new JScrollPane(displayArea);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-
-        add(topPanel, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
-
-        sendButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                sendMessage();
-            }
+    private void bindActions() {
+        startButton.addActionListener(e -> {
+            statusLabel.setText("未连接（Step 3 实现）");
+            storageLabel.setText("未打开");
+            appendLog("点击了“启动服务”：Step 0 仅展示界面，网络/数据库尚未接入。");
         });
 
-        startServer();
-    }
+        stopButton.addActionListener(e -> {
+            statusLabel.setText("已停止");
+            appendLog("点击了“停止服务”：当前没有运行中的网络服务。");
+        });
 
-    private void startServer() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    serverSocket = new ServerSocket(4700);
-                    appendMessage("服务器已启动，等待客户端连接...");
-                    socket = serverSocket.accept();
-                    appendMessage("服务器接收到客户端请求，已建立连接");
-                    reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
-                    receiveMessage();
-                } catch (IOException e) {
-                    appendMessage("服务器启动或连接失败：" + e.getMessage());
-                }
-            }
-        }).start();
-    }
-
-    private void receiveMessage() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    String message;
-                    while ((message = reader.readLine()) != null) {
-                        appendMessage("对方: " + message);
-                    }
-                } catch (IOException e) {
-                    appendMessage("客户端断开连接");
-                }
-            }
-        }).start();
-    }
-
-    private void sendMessage() {
-        String message = inputField.getText().trim();
-        if (message.isEmpty()) {
-            return;
-        }
-        if (writer != null) {
-            writer.println(message);
-            appendMessage("我：" + message);
-            inputField.setText("");
-        } else {
-            appendMessage("尚未建立连接，无法发送消息");
-        }
-    }
-
-    private void appendMessage(String message) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                displayArea.append(message + "\n");
-                displayArea.setCaretPosition(displayArea.getDocument().getLength());
+        broadcastButton.addActionListener(e -> {
+            String text = broadcastField.getText().trim();
+            if (!text.isEmpty()) {
+                appendLog("广播（占位）：" + text);
+                broadcastField.setText("");
             }
         });
     }
 
+    private void appendLog(String message) {
+        SwingUtilities.invokeLater(() -> {
+            logArea.append("[" + timeFormat.format(new Date()) + "] " + message + "\n");
+            logArea.setCaretPosition(logArea.getDocument().getLength());
+        });
+    }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                CoTalkServer server = new CoTalkServer();
-                server.setVisible(true);
-            }
+        SwingUtilities.invokeLater(() -> {
+            CoTalkServer server = new CoTalkServer();
+            server.setVisible(true);
         });
     }
 }
