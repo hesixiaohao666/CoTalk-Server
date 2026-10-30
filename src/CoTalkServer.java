@@ -17,7 +17,7 @@ public class CoTalkServer extends JFrame {
     private BufferedReader reader;
     private PrintWriter writer;
 
-    public ChatServer() {
+    public CoTalkServer() {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
@@ -149,7 +149,7 @@ public class CoTalkServer extends JFrame {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                ChatServer server = new ChatServer();
+                CoTalkServer server = new CoTalkServer();
                 server.setVisible(true);
             }
         });
