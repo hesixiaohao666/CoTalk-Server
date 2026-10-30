@@ -1,23 +1,35 @@
+import model.Member;
+import model.Room;
+import server.ChatServer;
+import server.RoomService;
+import server.ServerConfig;
+import server.ServerEvents;
+import store.ConnectionLogStore;
+import store.Database;
+import store.RoomStore;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 /**
- * CoTalk 服务端 Step 0 空壳。
- *
- * <p>只搭界面骨架：房间、在线成员、日志、启动/停止、广播输入。
- * 网络与 SQLite 将在 Step 3–4 接入；AI 在 Step 10 预留。</p>
+ * CoTalk 服务端：Swing 控制台 + Step 3 网络/数据库接入。
  */
 public class CoTalkServer extends JFrame {
 
     private final JLabel statusLabel = new JLabel("未启动");
     private final JLabel roomLabel = new JLabel("CoTalk 大厅");
-    private final JLabel storageLabel = new JLabel("未连接");
+    private final JLabel memberCountLabel = new JLabel("0 人");
+    private final JLabel storageLabel = new JLabel("未打开");
     private final JLabel aiLabel = new JLabel("未启用（预留）");
     private final DefaultListModel<String> memberModel = new DefaultListModel<>();
     private final JTextArea logArea = new JTextArea();
@@ -27,6 +39,36 @@ public class CoTalkServer extends JFrame {
     private final JButton broadcastButton = new JButton("广播");
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
+
+    private ChatServer chatServer;
+    private Database database;
+    private ServerConfig config;
+
+    private final ServerEvents events = new ServerEvents() {
+        @Override
+        public void onLog(String message) {
+            appendLog(message);
+        }
+
+        @Override
+        public void onMembersChanged(List<Member> members) {
+            SwingUtilities.invokeLater(() -> updateMembers(members));
+        }
+
+        @Override
+        public void onStatusChanged(String status) {
+            SwingUtilities.invokeLater(() -> {
+                statusLabel.setText(status);
+                if ("运行中".equals(status)) {
+                    startButton.setEnabled(false);
+                    stopButton.setEnabled(true);
+                } else if ("已停止".equals(status) || "启动失败".equals(status)) {
+                    startButton.setEnabled(true);
+                    stopButton.setEnabled(false);
+                }
+            });
+        }
+    };
 
     public CoTalkServer() {
         try {
@@ -38,7 +80,7 @@ public class CoTalkServer extends JFrame {
         setTitle("CoTalk 服务器");
         setSize(980, 620);
         setMinimumSize(new Dimension(820, 520));
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
@@ -50,9 +92,19 @@ public class CoTalkServer extends JFrame {
         add(buildCenter(baseFont, boldFont), BorderLayout.CENTER);
         add(buildFooter(baseFont, boldFont), BorderLayout.SOUTH);
 
+        stopButton.setEnabled(false);
         bindActions();
-        appendLog("Step 0：界面骨架已就绪。");
-        appendLog("网络与 SQLite 将在 Step 3–4 接入；AI 在 Step 10 预留。");
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                stopServer();
+                dispose();
+                System.exit(0);
+            }
+        });
+
+        appendLog("Step 3：SQLite/TCP/join 已接入。");
+        appendLog("点击“启动服务”后监听端口 4700；消息收发将在 Step 4 接入。");
     }
 
     private JPanel buildHeader(Font titleFont, Font boldFont) {
@@ -94,16 +146,21 @@ public class CoTalkServer extends JFrame {
         left.setBorder(new EmptyBorder(16, 16, 16, 8));
         left.setBackground(new Color(0xF5F5F5));
 
-        JPanel info = new JPanel(new GridLayout(4, 2, 8, 8));
+        JPanel info = new JPanel(new GridLayout(5, 2, 8, 8));
         info.setOpaque(false);
         info.setBorder(BorderFactory.createTitledBorder("房间信息"));
         info.add(label("房间", boldFont));
         info.add(roomLabel);
         info.add(label("状态", boldFont));
         info.add(statusLabelMirror());
+        info.add(label("在线", boldFont));
+        memberCountLabel.setFont(baseFont);
+        info.add(memberCountLabel);
         info.add(label("存储", boldFont));
+        storageLabel.setFont(baseFont);
         info.add(storageLabel);
         info.add(label("AI", boldFont));
+        aiLabel.setFont(baseFont);
         info.add(aiLabel);
 
         JList<String> memberList = new JList<>(memberModel);
@@ -159,30 +216,6 @@ public class CoTalkServer extends JFrame {
         return label;
     }
 
-    /**
-     * 选一个当前系统确实存在、且支持中文的字体。
-     * 避免日志用 Consolas 时中文变成方块/问号。
-     */
-    private static Font uiFont(int style, int size) {
-        String[] candidates = {
-                "Microsoft YaHei",
-                "微软雅黑",
-                "PingFang SC",
-                "Noto Sans CJK SC",
-                "SimSun",
-                "SansSerif"
-        };
-        Set<String> available = new HashSet<>(Arrays.asList(
-                GraphicsEnvironment.getLocalGraphicsEnvironment()
-                        .getAvailableFontFamilyNames()));
-        for (String name : candidates) {
-            if (available.contains(name)) {
-                return new Font(name, style, size);
-            }
-        }
-        return new Font(Font.SANS_SERIF, style, size);
-    }
-
     private JLabel statusLabelMirror() {
         JLabel label = new JLabel(statusLabel.getText());
         label.setFont(statusLabel.getFont());
@@ -205,24 +238,98 @@ public class CoTalkServer extends JFrame {
     }
 
     private void bindActions() {
-        startButton.addActionListener(e -> {
-            statusLabel.setText("未连接（Step 3 实现）");
-            storageLabel.setText("未打开");
-            appendLog("点击了“启动服务”：Step 0 仅展示界面，网络/数据库尚未接入。");
-        });
-
-        stopButton.addActionListener(e -> {
-            statusLabel.setText("已停止");
-            appendLog("点击了“停止服务”：当前没有运行中的网络服务。");
-        });
-
+        startButton.addActionListener(e -> startServer());
+        stopButton.addActionListener(e -> stopServer());
         broadcastButton.addActionListener(e -> {
             String text = broadcastField.getText().trim();
-            if (!text.isEmpty()) {
-                appendLog("广播（占位）：" + text);
+            if (text.isEmpty()) {
+                return;
+            }
+            if (chatServer != null && chatServer.isRunning()) {
+                chatServer.broadcastSystem(text);
+                appendLog("广播：" + text);
                 broadcastField.setText("");
+            } else {
+                appendLog("服务未启动，无法广播。");
             }
         });
+    }
+
+    private void startServer() {
+        if (chatServer != null && chatServer.isRunning()) {
+            return;
+        }
+
+        startButton.setEnabled(false);
+        statusLabel.setText("启动中…");
+        try {
+            config = ServerConfig.load();
+            database = new Database(config.dbPath);
+            database.open();
+
+            Room room = new RoomStore(database).loadOrCreate(
+                    config.roomName, config.roomAnnouncement);
+            ConnectionLogStore logStore = new ConnectionLogStore(database);
+            RoomService roomService = new RoomService(room);
+            chatServer = new ChatServer(config, roomService, logStore, events);
+            chatServer.start();
+
+            roomLabel.setText(room.name);
+            storageLabel.setText("SQLite 已连接");
+            aiLabel.setText(config.aiEnabled ? "已启用（预留）" : "未启用（预留）");
+            stopButton.setEnabled(true);
+
+            appendLog("服务已启动，端口 " + config.port + "，房间：" + room.name);
+            appendLog("数据库：" + config.dbPath);
+        } catch (Exception e) {
+            if (chatServer != null) {
+                chatServer.stop();
+                chatServer = null;
+            }
+            closeDatabase();
+            statusLabel.setText("启动失败");
+            startButton.setEnabled(true);
+            stopButton.setEnabled(false);
+            appendLog("启动失败：" + e.getMessage());
+        }
+    }
+
+    private void stopServer() {
+        if (chatServer != null) {
+            chatServer.stop();
+            chatServer = null;
+        }
+        closeDatabase();
+
+        statusLabel.setText("已停止");
+        storageLabel.setText("未打开");
+        roomLabel.setText("CoTalk 大厅");
+        aiLabel.setText("未启用（预留）");
+        memberCountLabel.setText("0 人");
+        memberModel.clear();
+        memberModel.addElement("（暂无在线成员）");
+        startButton.setEnabled(true);
+        stopButton.setEnabled(false);
+        appendLog("服务已停止。");
+    }
+
+    private void closeDatabase() {
+        if (database != null) {
+            database.close();
+            database = null;
+        }
+    }
+
+    private void updateMembers(List<Member> members) {
+        memberModel.clear();
+        if (members.isEmpty()) {
+            memberModel.addElement("（暂无在线成员）");
+        } else {
+            for (Member member : members) {
+                memberModel.addElement(member.nickname + (member.ai ? " [AI]" : ""));
+            }
+        }
+        memberCountLabel.setText(members.size() + " 人");
     }
 
     private void appendLog(String message) {
@@ -232,10 +339,90 @@ public class CoTalkServer extends JFrame {
         });
     }
 
+    /**
+     * 选一个当前系统确实存在、且支持中文的字体。
+     */
+    private static Font uiFont(int style, int size) {
+        String[] candidates = {
+                "Microsoft YaHei",
+                "微软雅黑",
+                "PingFang SC",
+                "Noto Sans CJK SC",
+                "SimSun",
+                "SansSerif"
+        };
+        Set<String> available = new HashSet<>(Arrays.asList(
+                GraphicsEnvironment.getLocalGraphicsEnvironment()
+                        .getAvailableFontFamilyNames()));
+        for (String name : candidates) {
+            if (available.contains(name)) {
+                return new Font(name, style, size);
+            }
+        }
+        return new Font(Font.SANS_SERIF, style, size);
+    }
+
     public static void main(String[] args) {
+        if (args.length > 0 && "--headless".equals(args[0])) {
+            runHeadless();
+            return;
+        }
         SwingUtilities.invokeLater(() -> {
             CoTalkServer server = new CoTalkServer();
             server.setVisible(true);
         });
+    }
+
+    private static void runHeadless() {
+        Database database = null;
+        ChatServer server = null;
+        try {
+            ServerConfig config = ServerConfig.load();
+            database = new Database(config.dbPath);
+            database.open();
+
+            Room room = new RoomStore(database).loadOrCreate(
+                    config.roomName, config.roomAnnouncement);
+            ConnectionLogStore logStore = new ConnectionLogStore(database);
+            RoomService roomService = new RoomService(room);
+
+            ServerEvents events = new ServerEvents() {
+                @Override
+                public void onLog(String message) {
+                    System.out.println("[CoTalk] " + message);
+                }
+
+                @Override
+                public void onMembersChanged(List<Member> members) {
+                    System.out.println("[CoTalk] 在线 " + members.size() + " 人");
+                }
+
+                @Override
+                public void onStatusChanged(String status) {
+                    System.out.println("[CoTalk] 状态：" + status);
+                }
+            };
+
+            server = new ChatServer(config, roomService, logStore, events);
+            ChatServer finalServer = server;
+            Database finalDatabase = database;
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                finalServer.stop();
+                finalDatabase.close();
+            }));
+
+            server.start();
+            System.out.println("CoTalk headless started: port=" + config.port
+                    + ", room=" + room.name + ", db=" + config.dbPath);
+            new CountDownLatch(1).await();
+        } catch (Exception e) {
+            if (server != null) {
+                server.stop();
+            }
+            if (database != null) {
+                database.close();
+            }
+            e.printStackTrace();
+        }
     }
 }
