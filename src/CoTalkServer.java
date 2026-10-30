@@ -2,7 +2,10 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * CoTalk 服务端 Step 0 空壳。
@@ -39,9 +42,9 @@ public class CoTalkServer extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        Font baseFont = new Font("微软雅黑", Font.PLAIN, 15);
-        Font boldFont = new Font("微软雅黑", Font.BOLD, 15);
-        Font titleFont = new Font("微软雅黑", Font.BOLD, 22);
+        Font baseFont = uiFont(Font.PLAIN, 15);
+        Font boldFont = uiFont(Font.BOLD, 15);
+        Font titleFont = uiFont(Font.BOLD, 22);
 
         add(buildHeader(titleFont, boldFont), BorderLayout.NORTH);
         add(buildCenter(baseFont, boldFont), BorderLayout.CENTER);
@@ -115,7 +118,8 @@ public class CoTalkServer extends JFrame {
         left.add(memberScroll, BorderLayout.CENTER);
 
         logArea.setEditable(false);
-        logArea.setFont(new Font("Consolas", Font.PLAIN, 14));
+        // 日志里包含中文；Consolas 不含中文字形，会导致“□□”/乱码。
+        logArea.setFont(uiFont(Font.PLAIN, 14));
         logArea.setBackground(Color.WHITE);
         logArea.setForeground(new Color(0x333333));
         logArea.setMargin(new Insets(10, 10, 10, 10));
@@ -153,6 +157,30 @@ public class CoTalkServer extends JFrame {
         JLabel label = new JLabel(text);
         label.setFont(font);
         return label;
+    }
+
+    /**
+     * 选一个当前系统确实存在、且支持中文的字体。
+     * 避免日志用 Consolas 时中文变成方块/问号。
+     */
+    private static Font uiFont(int style, int size) {
+        String[] candidates = {
+                "Microsoft YaHei",
+                "微软雅黑",
+                "PingFang SC",
+                "Noto Sans CJK SC",
+                "SimSun",
+                "SansSerif"
+        };
+        Set<String> available = new HashSet<>(Arrays.asList(
+                GraphicsEnvironment.getLocalGraphicsEnvironment()
+                        .getAvailableFontFamilyNames()));
+        for (String name : candidates) {
+            if (available.contains(name)) {
+                return new Font(name, style, size);
+            }
+        }
+        return new Font(Font.SANS_SERIF, style, size);
     }
 
     private JLabel statusLabelMirror() {
