@@ -3,8 +3,8 @@ package model;
 public class Member {
 
     public final String id;
-    public final String nickname;
-    public final int avatarVersion;
+    public volatile String nickname;
+    public volatile int avatarVersion;
     public final boolean ai;
     public final String ip;
     public final long connectedAt;

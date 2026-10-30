@@ -3,6 +3,7 @@ package server;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Member;
+import model.Message;
 import model.Room;
 import protocol.Protocol;
 import store.ConnectionLogStore;
@@ -17,6 +18,10 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -29,26 +34,38 @@ public class ClientHandler implements Runnable {
     private final ChatServer server;
     private final RoomService roomService;
     private final ConnectionLogStore connectionLogStore;
+    private final MessageService messageService;
     private final ServerConfig config;
     private final String ip;
     private final Object writeLock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final LinkedHashMap<String, Ack> recentAcks =
+            new LinkedHashMap<String, Ack>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Ack> eldest) {
+                    return size() > 200;
+                }
+            };
 
     private BufferedReader reader;
     private BufferedWriter writer;
     private volatile boolean joined;
     private Member member;
     private String clientTag = "";
+    private long rateWindowStart;
+    private int rateCount;
 
     public ClientHandler(Socket socket,
                          ChatServer server,
                          RoomService roomService,
                          ConnectionLogStore connectionLogStore,
+                         MessageService messageService,
                          ServerConfig config) {
         this.socket = socket;
         this.server = server;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
+        this.messageService = messageService;
         this.config = config;
         this.ip = socket.getInetAddress() == null
                 ? "unknown"
@@ -134,7 +151,11 @@ public class ClientHandler implements Runnable {
             case Protocol.LEAVE:
                 return false;
             case Protocol.CHAT:
+                handleChat(data, reqId);
+                return true;
             case Protocol.HISTORY_REQ:
+                handleHistory(data, reqId);
+                return true;
             case Protocol.PROFILE_UPDATE:
             case Protocol.AVATAR_REQ:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
@@ -192,7 +213,7 @@ public class ClientHandler implements Runnable {
 
         sendJoinOk(reqId);
         server.broadcastMemberList();
-        server.broadcastSystem(nickname + " 加入了群聊");
+        server.broadcastSystemMessage(nickname + " 加入了群聊");
         server.notifyMembersChanged();
 
         server.getEvents().onLog(nickname + " 加入，临时 ID " + member.id
@@ -208,7 +229,7 @@ public class ClientHandler implements Runnable {
         roomJson.addProperty("name", room.name);
         roomJson.addProperty("announcement",
                 room.announcement == null ? "" : room.announcement);
-        roomJson.addProperty("lastSeq", 0);
+        roomJson.addProperty("lastSeq", messageService.lastSeq());
         data.add("room", roomJson);
 
         JsonArray members = new JsonArray();
@@ -216,7 +237,20 @@ public class ClientHandler implements Runnable {
             members.add(ChatServer.memberJson(onlineMember));
         }
         data.add("members", members);
-        data.add("recent", new JsonArray());
+
+        JsonArray recent = new JsonArray();
+        try {
+            for (Message message : messageService.recent(config.historyRecent)) {
+                recent.add(ChatServer.messageJson(
+                        message,
+                        true,
+                        ChatServer.isSelf(message, clientTag)
+                ));
+            }
+        } catch (Exception e) {
+            server.getEvents().onLog("读取最近消息失败：" + e.getMessage());
+        }
+        data.add("recent", recent);
 
         JsonObject serverInfo = new JsonObject();
         serverInfo.addProperty("version", Protocol.VERSION);
@@ -227,6 +261,109 @@ public class ClientHandler implements Runnable {
         send(Protocol.frame(Protocol.JOIN_OK, reqId, data));
     }
 
+    private void handleChat(JsonObject data, String reqId) {
+        String clientMsgId = optString(data, "clientMsgId", "");
+        if (clientMsgId.isEmpty()) {
+            clientMsgId = "cm-" + UUID.randomUUID().toString()
+                    .replace("-", "")
+                    .substring(0, 12);
+        }
+
+        Ack cached = recentAcks.get(clientMsgId);
+        if (cached != null) {
+            sendAck(cached, reqId);
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - rateWindowStart > 5000) {
+            rateWindowStart = now;
+            rateCount = 0;
+        }
+        rateCount++;
+        if (rateCount > 10) {
+            send(Protocol.error(Protocol.ERR_RATE_LIMITED,
+                    "发送过于频繁，请稍后再试", reqId));
+            return;
+        }
+
+        String content = optString(data, "content", "").trim();
+        if (content.isEmpty() || content.length() > 1000) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "消息需为 1–1000 个字符", reqId));
+            return;
+        }
+
+        try {
+            Message message = messageService.createAndStore(
+                    member, clientTag, content);
+            Ack ack = new Ack(
+                    clientMsgId, message.msgUuid, message.seq, message.createdAt);
+            recentAcks.put(clientMsgId, ack);
+
+            sendAck(ack, reqId);
+            server.broadcastMessage(message, this);
+
+            String preview = content.length() > 40
+                    ? content.substring(0, 40) + "…"
+                    : content;
+            server.getEvents().onLog(member.nickname
+                    + " [" + message.seq + "]: " + preview);
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_DB,
+                    "消息保存失败，请稍后重试", reqId));
+            server.getEvents().onLog("消息落库失败：" + e.getMessage());
+        }
+    }
+
+    private void handleHistory(JsonObject data, String reqId) {
+        try {
+            int limit = data.has("limit") && data.get("limit").isJsonPrimitive()
+                    ? data.get("limit").getAsInt()
+                    : config.historyRecent;
+            limit = Math.max(1, Math.min(limit, config.historyMaxFetch));
+
+            List<Message> messages;
+            if (data.has("afterSeq") && data.get("afterSeq").isJsonPrimitive()) {
+                long afterSeq = data.get("afterSeq").getAsLong();
+                messages = messageService.after(afterSeq, limit);
+            } else {
+                long beforeSeq = data.has("beforeSeq")
+                        && data.get("beforeSeq").isJsonPrimitive()
+                        ? data.get("beforeSeq").getAsLong()
+                        : Long.MAX_VALUE;
+                messages = messageService.before(beforeSeq, limit);
+            }
+
+            JsonArray array = new JsonArray();
+            for (Message message : messages) {
+                array.add(ChatServer.messageJson(
+                        message,
+                        true,
+                        ChatServer.isSelf(message, clientTag)
+                ));
+            }
+
+            JsonObject response = new JsonObject();
+            response.add("messages", array);
+            response.addProperty("hasMore", messages.size() == limit);
+            send(Protocol.frame(Protocol.HISTORY_RES, reqId, response));
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_DB,
+                    "读取历史失败，请稍后重试", reqId));
+            server.getEvents().onLog("读取历史失败：" + e.getMessage());
+        }
+    }
+
+    private void sendAck(Ack ack, String reqId) {
+        JsonObject data = new JsonObject();
+        data.addProperty("clientMsgId", ack.clientMsgId);
+        data.addProperty("msgId", ack.msgId);
+        data.addProperty("seq", ack.seq);
+        data.addProperty("ts", ack.ts);
+        send(Protocol.frame(Protocol.MESSAGE_ACK, reqId, data));
+    }
+
     private void handlePing(JsonObject data, String reqId) {
         long t = data.has("t") && data.get("t").isJsonPrimitive()
                 ? data.get("t").getAsLong()
@@ -234,6 +371,20 @@ public class ClientHandler implements Runnable {
         JsonObject pong = new JsonObject();
         pong.addProperty("t", t);
         send(Protocol.frame(Protocol.PONG, reqId, pong));
+    }
+
+    private static final class Ack {
+        final String clientMsgId;
+        final String msgId;
+        final long seq;
+        final long ts;
+
+        Ack(String clientMsgId, String msgId, long seq, long ts) {
+            this.clientMsgId = clientMsgId;
+            this.msgId = msgId;
+            this.seq = seq;
+            this.ts = ts;
+        }
     }
 
     public void send(JsonObject frame) {
@@ -299,7 +450,7 @@ public class ClientHandler implements Runnable {
             }
             server.unregister(this);
             server.broadcastMemberList();
-            server.broadcastSystem(member.nickname + " 离开了群聊");
+            server.broadcastSystemMessage(member.nickname + " 离开了群聊");
             server.notifyMembersChanged();
             server.getEvents().onLog(member.nickname + " 离开，临时 ID " + member.id);
         } else {

@@ -3,6 +3,7 @@ package server;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Member;
+import model.Message;
 import protocol.Protocol;
 import store.ConnectionLogStore;
 import util.JsonUtil;
@@ -27,6 +28,7 @@ public class ChatServer {
     private final ServerConfig config;
     private final RoomService roomService;
     private final ConnectionLogStore connectionLogStore;
+    private final MessageService messageService;
     private final ServerEvents events;
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
@@ -39,10 +41,12 @@ public class ChatServer {
     public ChatServer(ServerConfig config,
                       RoomService roomService,
                       ConnectionLogStore connectionLogStore,
+                      MessageService messageService,
                       ServerEvents events) {
         this.config = config;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
+        this.messageService = messageService;
         this.events = events;
     }
 
@@ -74,7 +78,8 @@ public class ChatServer {
                 }
                 socket.setTcpNoDelay(true);
                 ClientHandler handler = new ClientHandler(
-                        socket, this, roomService, connectionLogStore, config);
+                        socket, this, roomService, connectionLogStore,
+                        messageService, config);
                 handlers.add(handler);
                 events.onLog("客户端连接："
                         + socket.getInetAddress().getHostAddress());
@@ -122,6 +127,10 @@ public class ChatServer {
 
     public RoomService getRoomService() {
         return roomService;
+    }
+
+    public MessageService getMessageService() {
+        return messageService;
     }
 
     public ServerEvents getEvents() {
@@ -173,6 +182,37 @@ public class ChatServer {
         }
     }
 
+    /**
+     * 持久化的系统消息（加入/离开），走 message(type=system)。
+     */
+    public void broadcastSystemMessage(String content) {
+        if (!running) {
+            return;
+        }
+        try {
+            Message message = messageService.appendSystem(content);
+            broadcastMessage(message, null);
+        } catch (Exception e) {
+            events.onLog("写入系统消息失败：" + e.getMessage());
+            broadcastSystem(content);
+        }
+    }
+
+    public void broadcastMessage(Message message, ClientHandler exclude) {
+        if (!running) {
+            return;
+        }
+        JsonObject data = messageJson(message, false, false);
+        String line = JsonUtil.stringify(
+                Protocol.frame(Protocol.MESSAGE, null, data));
+
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (handler != exclude && handler.isJoined()) {
+                handler.sendLine(line);
+            }
+        }
+    }
+
     public static JsonObject memberJson(Member member) {
         JsonObject json = new JsonObject();
         json.addProperty("id", member.id);
@@ -180,5 +220,29 @@ public class ChatServer {
         json.addProperty("avatarVersion", member.avatarVersion);
         json.addProperty("ai", member.ai);
         return json;
+    }
+
+    public static JsonObject messageJson(Message message,
+                                         boolean includeSelf,
+                                         boolean self) {
+        JsonObject json = new JsonObject();
+        json.addProperty("msgId", message.msgUuid);
+        json.addProperty("seq", message.seq);
+        json.addProperty("senderId", message.senderId);
+        json.addProperty("senderName", message.senderName);
+        json.addProperty("senderAvatarVersion", message.senderAvatarVersion);
+        json.addProperty("content", message.content);
+        json.addProperty("type", message.type);
+        json.addProperty("ts", message.createdAt);
+        if (includeSelf) {
+            json.addProperty("self", self);
+        }
+        return json;
+    }
+
+    public static boolean isSelf(Message message, String clientTag) {
+        return message.senderTag != null
+                && !message.senderTag.isEmpty()
+                && message.senderTag.equals(clientTag);
     }
 }

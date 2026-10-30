@@ -1,11 +1,13 @@
 import model.Member;
 import model.Room;
 import server.ChatServer;
+import server.MessageService;
 import server.RoomService;
 import server.ServerConfig;
 import server.ServerEvents;
 import store.ConnectionLogStore;
 import store.Database;
+import store.MessageStore;
 import store.RoomStore;
 
 import javax.swing.*;
@@ -270,8 +272,11 @@ public class CoTalkServer extends JFrame {
             Room room = new RoomStore(database).loadOrCreate(
                     config.roomName, config.roomAnnouncement);
             ConnectionLogStore logStore = new ConnectionLogStore(database);
+            MessageStore messageStore = new MessageStore(database);
+            MessageService messageService = new MessageService(messageStore);
             RoomService roomService = new RoomService(room);
-            chatServer = new ChatServer(config, roomService, logStore, events);
+            chatServer = new ChatServer(
+                    config, roomService, logStore, messageService, events);
             chatServer.start();
 
             roomLabel.setText(room.name);
@@ -384,6 +389,8 @@ public class CoTalkServer extends JFrame {
             Room room = new RoomStore(database).loadOrCreate(
                     config.roomName, config.roomAnnouncement);
             ConnectionLogStore logStore = new ConnectionLogStore(database);
+            MessageStore messageStore = new MessageStore(database);
+            MessageService messageService = new MessageService(messageStore);
             RoomService roomService = new RoomService(room);
 
             ServerEvents events = new ServerEvents() {
@@ -403,7 +410,8 @@ public class CoTalkServer extends JFrame {
                 }
             };
 
-            server = new ChatServer(config, roomService, logStore, events);
+            server = new ChatServer(
+                    config, roomService, logStore, messageService, events);
             ChatServer finalServer = server;
             Database finalDatabase = database;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
