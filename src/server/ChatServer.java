@@ -29,6 +29,7 @@ public class ChatServer {
     private final RoomService roomService;
     private final ConnectionLogStore connectionLogStore;
     private final MessageService messageService;
+    private final AvatarService avatarService;
     private final ServerEvents events;
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
@@ -42,11 +43,13 @@ public class ChatServer {
                       RoomService roomService,
                       ConnectionLogStore connectionLogStore,
                       MessageService messageService,
+                      AvatarService avatarService,
                       ServerEvents events) {
         this.config = config;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
+        this.avatarService = avatarService;
         this.events = events;
     }
 
@@ -79,7 +82,7 @@ public class ChatServer {
                 events.onServerAddress(socket.getLocalAddress().getHostAddress());
                 ClientHandler handler = new ClientHandler(
                         socket, this, roomService, connectionLogStore,
-                        messageService, config);
+                        messageService, avatarService, config);
                 handlers.add(handler);
                 events.onLog("客户端连接，IP："
                         + socket.getInetAddress().getHostAddress());

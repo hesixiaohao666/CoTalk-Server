@@ -2,6 +2,7 @@ package server;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import model.Avatar;
 import model.Member;
 import model.Message;
 import model.Room;
@@ -35,6 +36,7 @@ public class ClientHandler implements Runnable {
     private final RoomService roomService;
     private final ConnectionLogStore connectionLogStore;
     private final MessageService messageService;
+    private final AvatarService avatarService;
     private final ServerConfig config;
     private final String ip;
     private final Object writeLock = new Object();
@@ -60,12 +62,14 @@ public class ClientHandler implements Runnable {
                          RoomService roomService,
                          ConnectionLogStore connectionLogStore,
                          MessageService messageService,
+                         AvatarService avatarService,
                          ServerConfig config) {
         this.socket = socket;
         this.server = server;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
+        this.avatarService = avatarService;
         this.config = config;
         // accepted socket 的 getInetAddress() 是远端地址，即客户端 IP。
         this.ip = socket.getInetAddress() == null
@@ -158,9 +162,10 @@ public class ClientHandler implements Runnable {
                 handleHistory(data, reqId);
                 return true;
             case Protocol.PROFILE_UPDATE:
+                handleProfileUpdate(data, reqId);
+                return true;
             case Protocol.AVATAR_REQ:
-                send(Protocol.error(Protocol.ERR_UNSUPPORTED,
-                        "该功能将在后续 Step 实现", reqId));
+                handleAvatarRequest(data, reqId);
                 return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
@@ -184,11 +189,15 @@ public class ClientHandler implements Runnable {
         }
 
         String avatar = optString(data, "avatar", "");
-        long maxBase64Length = (long) config.avatarMaxBytes * 4L / 3L + 16L;
-        if (!avatar.isEmpty() && avatar.length() > maxBase64Length) {
-            send(Protocol.error(Protocol.ERR_AVATAR_TOO_LARGE,
-                    "头像过大", reqId));
-            return;
+        AvatarService.AvatarData avatarData = null;
+        if (!avatar.isEmpty()) {
+            try {
+                avatarData = avatarService.decode(avatar);
+            } catch (IllegalArgumentException e) {
+                send(Protocol.error(Protocol.ERR_AVATAR_TOO_LARGE,
+                        e.getMessage(), reqId));
+                return;
+            }
         }
 
         String tag = optString(data, "clientTag", "");
@@ -198,6 +207,17 @@ public class ClientHandler implements Runnable {
         clientTag = tag;
 
         member = roomService.join(nickname, ip);
+        if (avatarData != null) {
+            try {
+                member.avatarVersion = avatarService.save(member.id, avatarData);
+            } catch (Exception e) {
+                roomService.leave(member.id);
+                member = null;
+                send(Protocol.error(Protocol.ERR_INTERNAL,
+                        "头像保存失败", reqId));
+                return;
+            }
+        }
         joined = true;
 
         try {
@@ -260,6 +280,68 @@ public class ClientHandler implements Runnable {
         data.add("server", serverInfo);
 
         send(Protocol.frame(Protocol.JOIN_OK, reqId, data));
+    }
+
+    private void handleProfileUpdate(JsonObject data, String reqId) {
+        String nickname = optString(data, "nickname", "").trim();
+        if (!nickname.isEmpty()) {
+            if (nickname.length() > 16) {
+                send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                        "昵称需为 1–16 个字符", reqId));
+                return;
+            }
+            member.nickname = nickname;
+        }
+
+        String avatar = optString(data, "avatar", "");
+        if (!avatar.isEmpty()) {
+            try {
+                AvatarService.AvatarData avatarData = avatarService.decode(avatar);
+                member.avatarVersion = avatarService.save(member.id, avatarData);
+            } catch (IllegalArgumentException e) {
+                send(Protocol.error(Protocol.ERR_AVATAR_TOO_LARGE,
+                        e.getMessage(), reqId));
+                return;
+            } catch (Exception e) {
+                send(Protocol.error(Protocol.ERR_INTERNAL,
+                        "头像保存失败", reqId));
+                server.getEvents().onLog("头像保存失败：" + e.getMessage());
+                return;
+            }
+        }
+
+        server.broadcastMemberList();
+        server.notifyMembersChanged();
+        server.getEvents().onLog(member.nickname + " 更新了资料");
+    }
+
+    private void handleAvatarRequest(JsonObject data, String reqId) {
+        String userId = optString(data, "userId", "");
+        if (userId.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "缺少 userId", reqId));
+            return;
+        }
+        int version = data.has("version") && data.get("version").isJsonPrimitive()
+                ? data.get("version").getAsInt()
+                : 0;
+        try {
+            Avatar avatar = avatarService.load(userId, version);
+            JsonObject response = new JsonObject();
+            response.addProperty("userId", userId);
+            if (avatar == null) {
+                response.addProperty("version", 0);
+                response.addProperty("data", "");
+            } else {
+                response.addProperty("version", avatar.version);
+                response.addProperty("data", avatarService.toDataUri(avatar));
+            }
+            send(Protocol.frame(Protocol.AVATAR_RES, reqId, response));
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_DB,
+                    "头像读取失败", reqId));
+            server.getEvents().onLog("头像读取失败：" + e.getMessage());
+        }
     }
 
     private void handleChat(JsonObject data, String reqId) {

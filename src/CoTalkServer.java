@@ -1,10 +1,12 @@
 import model.Member;
 import model.Room;
+import server.AvatarService;
 import server.ChatServer;
 import server.MessageService;
 import server.RoomService;
 import server.ServerConfig;
 import server.ServerEvents;
+import store.AvatarStore;
 import store.ConnectionLogStore;
 import store.Database;
 import store.MessageStore;
@@ -291,9 +293,12 @@ public class CoTalkServer extends JFrame {
             ConnectionLogStore logStore = new ConnectionLogStore(database);
             MessageStore messageStore = new MessageStore(database);
             MessageService messageService = new MessageService(messageStore);
+            AvatarService avatarService = new AvatarService(
+                    new AvatarStore(database), config.avatarMaxBytes);
             RoomService roomService = new RoomService(room);
             chatServer = new ChatServer(
-                    config, roomService, logStore, messageService, events);
+                    config, roomService, logStore, messageService,
+                    avatarService, events);
             chatServer.start();
 
             roomLabel.setText(room.name);
@@ -442,6 +447,8 @@ public class CoTalkServer extends JFrame {
             ConnectionLogStore logStore = new ConnectionLogStore(database);
             MessageStore messageStore = new MessageStore(database);
             MessageService messageService = new MessageService(messageStore);
+            AvatarService avatarService = new AvatarService(
+                    new AvatarStore(database), config.avatarMaxBytes);
             RoomService roomService = new RoomService(room);
 
             ServerEvents events = new ServerEvents() {
@@ -467,7 +474,8 @@ public class CoTalkServer extends JFrame {
             };
 
             server = new ChatServer(
-                    config, roomService, logStore, messageService, events);
+                    config, roomService, logStore, messageService,
+                    avatarService, events);
             ChatServer finalServer = server;
             Database finalDatabase = database;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
