@@ -14,4 +14,6 @@ public interface ServerEvents {
     void onMembersChanged(List<Member> members);
 
     void onStatusChanged(String status);
+
+    void onServerAddress(String address);
 }

@@ -63,7 +63,6 @@ public class ChatServer {
         acceptThread.start();
 
         events.onStatusChanged("运行中");
-        events.onLog("服务已启动，端口 " + config.port);
     }
 
     private void acceptLoop() {
@@ -77,11 +76,12 @@ public class ChatServer {
                     continue;
                 }
                 socket.setTcpNoDelay(true);
+                events.onServerAddress(socket.getLocalAddress().getHostAddress());
                 ClientHandler handler = new ClientHandler(
                         socket, this, roomService, connectionLogStore,
                         messageService, config);
                 handlers.add(handler);
-                events.onLog("客户端连接："
+                events.onLog("客户端连接，IP："
                         + socket.getInetAddress().getHostAddress());
                 clientPool.execute(handler);
             } catch (IOException e) {

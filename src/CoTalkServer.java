@@ -15,8 +15,13 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +35,7 @@ public class CoTalkServer extends JFrame {
 
     private final JLabel statusLabel = new JLabel("未启动");
     private final JLabel roomLabel = new JLabel("CoTalk 大厅");
+    private final JLabel serverIpLabel = new JLabel("检测中…");
     private final JLabel memberCountLabel = new JLabel("0 人");
     private final JLabel storageLabel = new JLabel("未打开");
     private final JLabel aiLabel = new JLabel("未启用（预留）");
@@ -70,6 +76,11 @@ public class CoTalkServer extends JFrame {
                 }
             });
         }
+
+        @Override
+        public void onServerAddress(String address) {
+            SwingUtilities.invokeLater(() -> serverIpLabel.setText(address));
+        }
     };
 
     public CoTalkServer() {
@@ -105,8 +116,8 @@ public class CoTalkServer extends JFrame {
             }
         });
 
-        appendLog("Step 3：SQLite/TCP/join 已接入。");
-        appendLog("点击“启动服务”后监听端口 4700；消息收发将在 Step 4 接入。");
+        appendLog("CoTalk 服务端已就绪。");
+        appendLog("点击“启动服务”后监听端口 4700。");
     }
 
     private JPanel buildHeader(Font titleFont, Font boldFont) {
@@ -148,11 +159,15 @@ public class CoTalkServer extends JFrame {
         left.setBorder(new EmptyBorder(16, 16, 16, 8));
         left.setBackground(new Color(0xF5F5F5));
 
-        JPanel info = new JPanel(new GridLayout(5, 2, 8, 8));
+        JPanel info = new JPanel(new GridLayout(6, 2, 8, 8));
         info.setOpaque(false);
         info.setBorder(BorderFactory.createTitledBorder("房间信息"));
         info.add(label("房间", boldFont));
         info.add(roomLabel);
+        info.add(label("服务器 IP", boldFont));
+        serverIpLabel.setText(findServerIp());
+        serverIpLabel.setFont(baseFont);
+        info.add(serverIpLabel);
         info.add(label("状态", boldFont));
         info.add(statusLabelMirror());
         info.add(label("在线", boldFont));
@@ -248,6 +263,8 @@ public class CoTalkServer extends JFrame {
                 return;
             }
             if (chatServer != null && chatServer.isRunning()) {
+                // 先写入聊天记录（message type=system），再发一条临时 system 供客户端 Toast。
+                chatServer.broadcastSystemMessage(text);
                 chatServer.broadcastSystem(text);
                 appendLog("广播：" + text);
                 broadcastField.setText("");
@@ -315,7 +332,6 @@ public class CoTalkServer extends JFrame {
         memberModel.addElement("（暂无在线成员）");
         startButton.setEnabled(true);
         stopButton.setEnabled(false);
-        appendLog("服务已停止。");
     }
 
     private void closeDatabase() {
@@ -342,6 +358,41 @@ public class CoTalkServer extends JFrame {
             logArea.append("[" + timeFormat.format(new Date()) + "] " + message + "\n");
             logArea.setCaretPosition(logArea.getDocument().getLength());
         });
+    }
+
+    /**
+     * 找一个本机局域网 IPv4，用于房间信息展示；连接后会用本次连接的服务端本地地址更新。
+     */
+    private static String findServerIp() {
+        try {
+            String fallback = null;
+            for (NetworkInterface networkInterface
+                    : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!networkInterface.isUp() || networkInterface.isLoopback()) {
+                    continue;
+                }
+                for (InterfaceAddress interfaceAddress
+                        : networkInterface.getInterfaceAddresses()) {
+                    InetAddress address = interfaceAddress.getAddress();
+                    if (!(address instanceof Inet4Address)
+                            || address.isLoopbackAddress()) {
+                        continue;
+                    }
+                    if (address.isSiteLocalAddress()) {
+                        return address.getHostAddress();
+                    }
+                    if (fallback == null) {
+                        fallback = address.getHostAddress();
+                    }
+                }
+            }
+            if (fallback != null) {
+                return fallback;
+            }
+        } catch (Exception ignored) {
+            // 使用回环地址兜底
+        }
+        return "127.0.0.1";
     }
 
     /**
@@ -407,6 +458,11 @@ public class CoTalkServer extends JFrame {
                 @Override
                 public void onStatusChanged(String status) {
                     System.out.println("[CoTalk] 状态：" + status);
+                }
+
+                @Override
+                public void onServerAddress(String address) {
+                    System.out.println("[CoTalk] 服务器地址：" + address);
                 }
             };
 

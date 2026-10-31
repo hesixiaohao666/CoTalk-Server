@@ -67,6 +67,7 @@ public class ClientHandler implements Runnable {
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
         this.config = config;
+        // accepted socket 的 getInetAddress() 是远端地址，即客户端 IP。
         this.ip = socket.getInetAddress() == null
                 ? "unknown"
                 : socket.getInetAddress().getHostAddress();
@@ -217,7 +218,7 @@ public class ClientHandler implements Runnable {
         server.notifyMembersChanged();
 
         server.getEvents().onLog(nickname + " 加入，临时 ID " + member.id
-                + "，IP " + ip);
+                + "，客户端 IP " + ip);
     }
 
     private void sendJoinOk(String reqId) {
@@ -307,8 +308,7 @@ public class ClientHandler implements Runnable {
             String preview = content.length() > 40
                     ? content.substring(0, 40) + "…"
                     : content;
-            server.getEvents().onLog(member.nickname
-                    + " [" + message.seq + "]: " + preview);
+            server.getEvents().onLog(member.nickname + ": " + preview);
         } catch (Exception e) {
             send(Protocol.error(Protocol.ERR_DB,
                     "消息保存失败，请稍后重试", reqId));
