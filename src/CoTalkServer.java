@@ -6,9 +6,11 @@ import server.AvatarService;
 import server.ChatServer;
 import server.MessageService;
 import server.RoomService;
+import server.HeadlessConsole;
 import server.ServerConfig;
 import server.ServerConfigStore;
 import server.ServerEvents;
+import server.ServerRuntime;
 import store.AvatarStore;
 import store.ConnectionLogStore;
 import store.Database;
@@ -53,8 +55,7 @@ public class CoTalkServer extends JFrame {
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
 
-    private ChatServer chatServer;
-    private Database database;
+    private ServerRuntime runtime;
     private ServerConfig config;
 
     private final ServerEvents events = new ServerEvents() {
@@ -267,10 +268,8 @@ public class CoTalkServer extends JFrame {
             if (text.isEmpty()) {
                 return;
             }
-            if (chatServer != null && chatServer.isRunning()) {
-                // 先写入聊天记录（message type=system），再发一条临时 system 供客户端 Toast。
-                chatServer.broadcastSystemMessage(text);
-                chatServer.broadcastSystem(text);
+            if (runtime != null && runtime.isRunning()) {
+                runtime.broadcast(text);
                 appendLog("广播：" + text);
                 broadcastField.setText("");
             } else {
@@ -280,7 +279,7 @@ public class CoTalkServer extends JFrame {
     }
 
     private void startServer() {
-        if (chatServer != null && chatServer.isRunning()) {
+        if (runtime != null && runtime.isRunning()) {
             return;
         }
 
@@ -296,36 +295,23 @@ public class CoTalkServer extends JFrame {
                 appendLog("已生成连接密钥：" + configResult.generatedKey
                         + "（请复制到客户端）");
             }
-            database = new Database(config.dbPath);
-            database.open();
 
-            Room room = new RoomStore(database).loadOrCreate(
-                    config.roomName, config.roomAnnouncement);
-            ConnectionLogStore logStore = new ConnectionLogStore(database);
-            MessageStore messageStore = new MessageStore(database);
-            MessageService messageService = new MessageService(messageStore);
-            AvatarService avatarService = new AvatarService(
-                    new AvatarStore(database), config.avatarMaxBytes);
-            AiResponder aiResponder = AiResponderFactory.create(config);
-            RoomService roomService = new RoomService(room);
-            chatServer = new ChatServer(
-                    config, roomService, logStore, messageService,
-                    avatarService, aiResponder, events);
-            chatServer.start();
+            runtime = new ServerRuntime(config, events);
+            runtime.start();
 
-            roomLabel.setText(room.name);
+            roomLabel.setText(runtime.getRoom().name);
             storageLabel.setText("SQLite 已连接");
-            aiLabel.setText(config.aiEnabled ? "已启用（预留）" : "未启用（预留）");
+            aiLabel.setText(runtime.getAiStatus());
             stopButton.setEnabled(true);
 
-            appendLog("服务已启动，端口 " + config.port + "，房间：" + room.name);
+            appendLog("服务已启动，端口 " + config.port
+                    + "，房间：" + runtime.getRoom().name);
             appendLog("数据库：" + config.dbPath);
         } catch (Exception e) {
-            if (chatServer != null) {
-                chatServer.stop();
-                chatServer = null;
+            if (runtime != null) {
+                runtime.stop();
+                runtime = null;
             }
-            closeDatabase();
             statusLabel.setText("启动失败");
             startButton.setEnabled(true);
             stopButton.setEnabled(false);
@@ -334,28 +320,20 @@ public class CoTalkServer extends JFrame {
     }
 
     private void stopServer() {
-        if (chatServer != null) {
-            chatServer.stop();
-            chatServer = null;
+        if (runtime != null) {
+            runtime.stop();
+            runtime = null;
         }
-        closeDatabase();
 
         statusLabel.setText("已停止");
         storageLabel.setText("未打开");
         roomLabel.setText("CoTalk 大厅");
-        aiLabel.setText("未启用（预留）");
+        aiLabel.setText("未启用");
         memberCountLabel.setText("0 人");
         memberModel.clear();
         memberModel.addElement("（暂无在线成员）");
         startButton.setEnabled(true);
         stopButton.setEnabled(false);
-    }
-
-    private void closeDatabase() {
-        if (database != null) {
-            database.close();
-            database = null;
-        }
     }
 
     private void updateMembers(List<Member> members) {
@@ -477,84 +455,36 @@ public class CoTalkServer extends JFrame {
     }
 
     public static void main(String[] args) {
-        if (args.length > 0 && "--headless".equals(args[0])) {
-            runHeadless();
+        boolean forceGui = hasArg(args, "--gui");
+        boolean forceHeadless = hasArg(args, "--headless")
+                || hasArg(args, "--console");
+
+        if (forceHeadless
+                || (!forceGui && GraphicsEnvironment.isHeadless())) {
+            HeadlessConsole.run(args);
             return;
         }
-        SwingUtilities.invokeLater(() -> {
-            CoTalkServer server = new CoTalkServer();
-            server.setVisible(true);
-        });
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    CoTalkServer server = new CoTalkServer();
+                    server.setVisible(true);
+                } catch (HeadlessException e) {
+                    HeadlessConsole.run(args);
+                }
+            });
+        } catch (Exception e) {
+            HeadlessConsole.run(args);
+        }
     }
 
-    private static void runHeadless() {
-        Database database = null;
-        ChatServer server = null;
-        try {
-            ServerConfigStore.LoadResult configResult = ServerConfigStore.loadOrCreate();
-            ServerConfig config = configResult.config;
-            System.out.println("[CoTalk] 配置文件：" + configResult.path);
-            if (configResult.keyGenerated) {
-                System.out.println("[CoTalk] 已生成连接密钥："
-                        + configResult.generatedKey + "（请复制到客户端）");
+    private static boolean hasArg(String[] args, String needle) {
+        for (String arg : args) {
+            if (needle.equals(arg)) {
+                return true;
             }
-            database = new Database(config.dbPath);
-            database.open();
-
-            Room room = new RoomStore(database).loadOrCreate(
-                    config.roomName, config.roomAnnouncement);
-            ConnectionLogStore logStore = new ConnectionLogStore(database);
-            MessageStore messageStore = new MessageStore(database);
-            MessageService messageService = new MessageService(messageStore);
-            AvatarService avatarService = new AvatarService(
-                    new AvatarStore(database), config.avatarMaxBytes);
-            AiResponder aiResponder = AiResponderFactory.create(config);
-            RoomService roomService = new RoomService(room);
-
-            ServerEvents events = new ServerEvents() {
-                @Override
-                public void onLog(String message) {
-                    System.out.println("[CoTalk] " + message);
-                }
-
-                @Override
-                public void onMembersChanged(List<Member> members) {
-                    System.out.println("[CoTalk] 在线 " + members.size() + " 人");
-                }
-
-                @Override
-                public void onStatusChanged(String status) {
-                    System.out.println("[CoTalk] 状态：" + status);
-                }
-
-                @Override
-                public void onServerAddress(String address) {
-                    System.out.println("[CoTalk] 服务器地址：" + address);
-                }
-            };
-
-            server = new ChatServer(
-                    config, roomService, logStore, messageService,
-                    avatarService, aiResponder, events);
-            ChatServer finalServer = server;
-            Database finalDatabase = database;
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                finalServer.stop();
-                finalDatabase.close();
-            }));
-
-            server.start();
-            System.out.println("CoTalk headless started: port=" + config.port
-                    + ", room=" + room.name + ", db=" + config.dbPath);
-            new CountDownLatch(1).await();
-        } catch (Exception e) {
-            if (server != null) {
-                server.stop();
-            }
-            if (database != null) {
-                database.close();
-            }
-            e.printStackTrace();
         }
+        return false;
     }
 }

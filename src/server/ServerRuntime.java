@@ -1,0 +1,117 @@
+package server;
+
+import ai.AiResponder;
+import ai.AiResponderFactory;
+import model.Member;
+import model.Room;
+import store.AvatarStore;
+import store.ConnectionLogStore;
+import store.Database;
+import store.MessageStore;
+import store.RoomStore;
+
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * 不依赖 Swing 的服务端运行时，GUI 与终端模式共用。
+ */
+public final class ServerRuntime {
+
+    private final ServerConfig config;
+    private final ServerEvents events;
+
+    private Database database;
+    private Room room;
+    private RoomService roomService;
+    private ChatServer chatServer;
+
+    public ServerRuntime(ServerConfig config, ServerEvents events) {
+        this.config = config;
+        this.events = events;
+    }
+
+    public synchronized void start() throws Exception {
+        if (isRunning()) {
+            return;
+        }
+
+        database = new Database(config.dbPath);
+        database.open();
+        try {
+            room = new RoomStore(database).loadOrCreate(
+                    config.roomName, config.roomAnnouncement);
+            ConnectionLogStore logStore = new ConnectionLogStore(database);
+            MessageStore messageStore = new MessageStore(database);
+            MessageService messageService = new MessageService(messageStore);
+            AvatarService avatarService = new AvatarService(
+                    new AvatarStore(database), config.avatarMaxBytes);
+            AiResponder aiResponder = AiResponderFactory.create(config);
+            roomService = new RoomService(room);
+            chatServer = new ChatServer(
+                    config, roomService, logStore, messageService,
+                    avatarService, aiResponder, events);
+            chatServer.start();
+        } catch (Exception e) {
+            if (chatServer != null) {
+                chatServer.stop();
+                chatServer = null;
+            }
+            if (database != null) {
+                database.close();
+                database = null;
+            }
+            throw e;
+        }
+    }
+
+    public synchronized void stop() {
+        if (chatServer != null) {
+            chatServer.stop();
+            chatServer = null;
+        }
+        if (database != null) {
+            database.close();
+            database = null;
+        }
+    }
+
+    public boolean isRunning() {
+        return chatServer != null && chatServer.isRunning();
+    }
+
+    public ServerConfig getConfig() {
+        return config;
+    }
+
+    public Room getRoom() {
+        return room;
+    }
+
+    public RoomService getRoomService() {
+        return roomService;
+    }
+
+    public List<Member> getMembers() {
+        return roomService == null
+                ? Collections.emptyList()
+                : roomService.snapshot();
+    }
+
+    public void broadcast(String text) {
+        if (chatServer != null && chatServer.isRunning()) {
+            chatServer.broadcastSystemMessage(text);
+            chatServer.broadcastSystem(text);
+        }
+    }
+
+    public String getAiStatus() {
+        if (!config.aiEnabled) {
+            return "未启用";
+        }
+        if (config.aiApiKey == null || config.aiApiKey.trim().isEmpty()) {
+            return "已开启但未配置 API Key";
+        }
+        return "已启用，模型 " + config.aiModel;
+    }
+}
