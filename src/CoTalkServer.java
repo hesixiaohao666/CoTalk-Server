@@ -11,6 +11,7 @@ import server.ServerConfig;
 import server.ServerConfigStore;
 import server.ServerEvents;
 import server.ServerRuntime;
+import server.ServerSettingsDialog;
 import store.AvatarStore;
 import store.ConnectionLogStore;
 import store.Database;
@@ -41,6 +42,7 @@ import java.util.concurrent.CountDownLatch;
 public class CoTalkServer extends JFrame {
 
     private final JLabel statusLabel = new JLabel("未启动");
+    private final JLabel portLabel = new JLabel("端口 4700");
     private final JLabel roomLabel = new JLabel("CoTalk 大厅");
     private final JLabel serverIpLabel = new JLabel("检测中…");
     private final JLabel memberCountLabel = new JLabel("0 人");
@@ -51,6 +53,7 @@ public class CoTalkServer extends JFrame {
     private final JTextField broadcastField = new JTextField(30);
     private final JButton startButton = new JButton("启动服务");
     private final JButton stopButton = new JButton("停止服务");
+    private final JButton settingsButton = new JButton("设置");
     private final JButton broadcastButton = new JButton("广播");
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
@@ -123,7 +126,7 @@ public class CoTalkServer extends JFrame {
         });
 
         appendLog("CoTalk 服务端已就绪。");
-        appendLog("点击“启动服务”后监听端口 4700。");
+        appendLog("点击“启动服务”后按 config.properties 监听端口。");
     }
 
     private JPanel buildHeader(Font titleFont, Font boldFont) {
@@ -143,15 +146,17 @@ public class CoTalkServer extends JFrame {
 
         styleButton(startButton, boldFont);
         styleButton(stopButton, boldFont);
+        styleButton(settingsButton, boldFont);
         startButton.setPreferredSize(new Dimension(110, 36));
         stopButton.setPreferredSize(new Dimension(110, 36));
+        settingsButton.setPreferredSize(new Dimension(90, 36));
 
-        JLabel portLabel = new JLabel("端口 4700");
         portLabel.setFont(boldFont);
         portLabel.setForeground(Color.BLACK);
 
         right.add(statusLabel);
         right.add(portLabel);
+        right.add(settingsButton);
         right.add(startButton);
         right.add(stopButton);
 
@@ -263,6 +268,7 @@ public class CoTalkServer extends JFrame {
     private void bindActions() {
         startButton.addActionListener(e -> startServer());
         stopButton.addActionListener(e -> stopServer());
+        settingsButton.addActionListener(e -> openSettings());
         broadcastButton.addActionListener(e -> {
             String text = broadcastField.getText().trim();
             if (text.isEmpty()) {
@@ -288,6 +294,7 @@ public class CoTalkServer extends JFrame {
         try {
             ServerConfigStore.LoadResult configResult = ServerConfigStore.loadOrCreate();
             config = configResult.config;
+            portLabel.setText("端口 " + config.port);
             if (configResult.created) {
                 appendLog("已生成配置文件：" + configResult.path);
             }
@@ -316,6 +323,58 @@ public class CoTalkServer extends JFrame {
             startButton.setEnabled(true);
             stopButton.setEnabled(false);
             appendLog("启动失败：" + e.getMessage());
+        }
+    }
+
+    private void openSettings() {
+        try {
+            ServerConfigStore.LoadResult loaded = ServerConfigStore.loadOrCreate();
+            if (loaded.created) {
+                appendLog("已生成配置文件：" + loaded.path);
+            }
+            if (loaded.keyGenerated) {
+                appendLog("已生成连接密钥：" + loaded.generatedKey
+                        + "（请复制到客户端）");
+            }
+
+            ServerSettingsDialog dialog = new ServerSettingsDialog(
+                    this, loaded.config, loaded.path);
+            ServerConfig saved = dialog.showDialog();
+            if (saved != null) {
+                appendLog("配置已保存：" + loaded.path);
+                onSettingsSaved(saved);
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                    "打开设置失败：" + e.getMessage(),
+                    "设置", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onSettingsSaved(ServerConfig saved) {
+        boolean running = runtime != null && runtime.isRunning();
+        if (!running) {
+            portLabel.setText("端口 " + saved.port);
+            appendLog("配置将在下次启动服务时生效。");
+            return;
+        }
+
+        int choice = JOptionPane.showOptionDialog(
+                this,
+                "配置已保存。端口、连接密钥与 AI 配置需要重启服务后生效。\n是否立即重启服务？",
+                "配置已保存",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                new Object[]{"立即重启", "稍后"},
+                "立即重启"
+        );
+        if (choice == 0) {
+            appendLog("正在按新配置重启服务…");
+            stopServer();
+            startServer();
+        } else {
+            appendLog("配置将在下次重启服务后生效。");
         }
     }
 
