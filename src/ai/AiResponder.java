@@ -6,10 +6,16 @@ import model.Message;
 import java.util.List;
 
 /**
- * 服务端 AI 群友接口。本期使用 NoopAiResponder。
- * 未来实现：3 秒防抖/冷却 + 选择性回复 + 合并窗口内消息。
+ * 服务端 AI 群友接口。
  */
 public interface AiResponder {
+
+    String AI_USER_ID = "ai-90001";
+
+    /**
+     * AI 是否真正可用（开关开启且已配置 API Key）。
+     */
+    boolean isActive();
 
     void onMessage(Member sender, Message message, List<Message> recentContext);
 

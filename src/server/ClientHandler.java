@@ -302,7 +302,7 @@ public class ClientHandler implements Runnable {
                 VersionPolicy.MIN_CLIENT_VERSION_CODE);
         ok.addProperty("maxClientVersionCode",
                 VersionPolicy.MAX_CLIENT_VERSION_CODE);
-        ok.addProperty("aiEnabled", config.aiEnabled);
+        ok.addProperty("aiEnabled", server.isAiActive());
         send(Protocol.frame(Protocol.HELLO_OK, reqId, ok));
         server.getEvents().onLog("密钥验证通过：" + ip);
         return true;
@@ -417,7 +417,7 @@ public class ClientHandler implements Runnable {
 
         JsonObject serverInfo = new JsonObject();
         serverInfo.addProperty("version", Protocol.VERSION);
-        serverInfo.addProperty("aiEnabled", config.aiEnabled);
+        serverInfo.addProperty("aiEnabled", server.isAiActive());
         serverInfo.addProperty("aiName", config.aiName);
         data.add("server", serverInfo);
 

@@ -16,9 +16,21 @@ public class RoomService {
 
     private final Room room;
     private final ConcurrentHashMap<String, Member> online = new ConcurrentHashMap<>();
+    private volatile Member aiMember;
 
     public RoomService(Room room) {
         this.room = room;
+    }
+
+    /**
+     * AI 不是真实连接，不进入 online map，只参与成员快照。
+     */
+    public void setAiMember(Member member) {
+        this.aiMember = member;
+    }
+
+    public Member getAiMember() {
+        return aiMember;
     }
 
     public Room getRoom() {
@@ -50,11 +62,15 @@ public class RoomService {
     }
 
     public int size() {
-        return online.size();
+        return online.size() + (aiMember == null ? 0 : 1);
     }
 
     public List<Member> snapshot() {
         List<Member> members = new ArrayList<>(online.values());
+        Member ai = aiMember;
+        if (ai != null) {
+            members.add(ai);
+        }
         members.sort(Comparator
                 .comparingLong((Member member) -> member.connectedAt)
                 .thenComparing(member -> member.id));

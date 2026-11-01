@@ -1,6 +1,8 @@
 package server;
 
+import ai.AiReplySink;
 import ai.AiResponder;
+import ai.NoopAiResponder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Member;
@@ -23,15 +25,15 @@ import java.util.concurrent.Executors;
 /**
  * TCP 服务端：连接管理、成员广播、消息广播与 AI 钩子。
  */
-public class ChatServer {
+public class ChatServer implements AiReplySink {
 
     private final ServerConfig config;
     private final RoomService roomService;
     private final ConnectionLogStore connectionLogStore;
     private final MessageService messageService;
     private final AvatarService avatarService;
-    private final AiResponder aiResponder;
     private final ServerEvents events;
+    private volatile AiResponder aiResponder = new NoopAiResponder();
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
     private final ExecutorService clientPool = Executors.newCachedThreadPool();
@@ -45,15 +47,24 @@ public class ChatServer {
                       ConnectionLogStore connectionLogStore,
                       MessageService messageService,
                       AvatarService avatarService,
-                      AiResponder aiResponder,
                       ServerEvents events) {
         this.config = config;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
         this.avatarService = avatarService;
-        this.aiResponder = aiResponder;
         this.events = events;
+    }
+
+    public void setAiResponder(AiResponder responder) {
+        if (responder != null) {
+            this.aiResponder = responder;
+        }
+    }
+
+    public boolean isAiActive() {
+        AiResponder responder = aiResponder;
+        return responder != null && responder.isActive();
     }
 
     public void start() throws IOException {
@@ -206,18 +217,46 @@ public class ChatServer {
     }
 
     public void onChatMessage(Member sender, Message message) {
-        if (aiResponder == null) {
+        AiResponder responder = aiResponder;
+        if (responder == null || !responder.isActive()) {
             return;
         }
         try {
-            aiResponder.onMessage(
+            responder.onMessage(
                     sender,
                     message,
-                    messageService.recent(10)
+                    messageService.recent(config.aiMaxContext)
             );
         } catch (Exception e) {
             events.onLog("AI 消息钩子异常：" + e.getMessage());
         }
+    }
+
+    @Override
+    public void appendAiMessage(String content) throws Exception {
+        if (!running) {
+            return;
+        }
+        Member aiMember = roomService.getAiMember();
+        if (aiMember == null) {
+            throw new IllegalStateException("AI 成员尚未初始化");
+        }
+        Message message = messageService.appendAiMessage(aiMember, content);
+        broadcastMessage(message, null);
+        events.onLog(aiMember.nickname + ": " + content);
+    }
+
+    @Override
+    public void reportFailure(String message) {
+        if (!running) {
+            return;
+        }
+        broadcastSystemMessage(message);
+    }
+
+    @Override
+    public void reportError(String detail) {
+        events.onLog(detail);
     }
 
     public void onMemberJoined(Member member) {

@@ -3,19 +3,37 @@ package ai;
 import server.ServerConfig;
 
 /**
- * AI 装配入口。本期始终返回 Noop；未来 ai.enabled=true 时在这里注入
- * DeepSeekAiResponder（内部使用 DeepSeekClient）。
+ * AI 装配入口：开关开启且配置 API Key 时使用 DeepSeek，否则使用空实现。
  */
 public final class AiResponderFactory {
 
     private AiResponderFactory() {
     }
 
-    public static AiResponder create(ServerConfig config) {
-        return new NoopAiResponder();
+    public static boolean isConfigured(ServerConfig config) {
+        return config != null
+                && config.aiEnabled
+                && config.aiApiKey != null
+                && !config.aiApiKey.trim().isEmpty()
+                && config.aiModel != null
+                && !config.aiModel.trim().isEmpty()
+                && config.aiBaseUrl != null
+                && !config.aiBaseUrl.trim().isEmpty();
+    }
+
+    public static AiResponder create(ServerConfig config, AiReplySink sink) {
+        if (!isConfigured(config) || sink == null) {
+            return new NoopAiResponder();
+        }
+        return new DeepSeekAiResponder(
+                config, createDeepSeekClient(config), sink);
     }
 
     public static DeepSeekClient createDeepSeekClient(ServerConfig config) {
-        return new NoopDeepSeekClient();
+        if (config == null || config.aiApiKey == null
+                || config.aiApiKey.trim().isEmpty()) {
+            return new NoopDeepSeekClient();
+        }
+        return new DeepSeekHttpClient(config);
     }
 }

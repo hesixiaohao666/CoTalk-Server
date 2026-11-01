@@ -3,7 +3,7 @@ package ai;
 import java.util.List;
 
 /**
- * 本期占位：不发起任何网络请求。
+ * AI 未启用时的占位客户端：不发起任何网络请求。
  */
 public class NoopDeepSeekClient implements DeepSeekClient {
 

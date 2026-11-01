@@ -57,6 +57,24 @@ public class MessageService {
         return message;
     }
 
+    public synchronized Message appendAiMessage(Member aiMember,
+                                                String content) throws SQLException {
+        Message message = new Message();
+        message.msgUuid = newMsgUuid();
+        message.seq = nextSeq;
+        message.senderId = aiMember.id;
+        message.senderName = aiMember.nickname;
+        message.senderTag = "";
+        message.senderAvatarVersion = aiMember.avatarVersion;
+        message.content = content;
+        message.type = "ai";
+        message.createdAt = System.currentTimeMillis();
+
+        messageStore.insert(message);
+        nextSeq++;
+        return message;
+    }
+
     public synchronized long lastSeq() {
         return Math.max(0L, nextSeq - 1);
     }

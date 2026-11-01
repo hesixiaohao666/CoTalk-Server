@@ -1,6 +1,5 @@
 package server;
 
-import ai.AiResponder;
 import ai.AiResponderFactory;
 import model.Member;
 import model.Room;
@@ -46,11 +45,18 @@ public final class ServerRuntime {
             MessageService messageService = new MessageService(messageStore);
             AvatarService avatarService = new AvatarService(
                     new AvatarStore(database), config.avatarMaxBytes);
-            AiResponder aiResponder = AiResponderFactory.create(config);
             roomService = new RoomService(room);
             chatServer = new ChatServer(
                     config, roomService, logStore, messageService,
-                    avatarService, aiResponder, events);
+                    avatarService, events);
+
+            Member aiMember = AiMemberService.prepare(
+                    config, avatarService, events);
+            if (aiMember != null) {
+                roomService.setAiMember(aiMember);
+            }
+            chatServer.setAiResponder(
+                    AiResponderFactory.create(config, chatServer));
             chatServer.start();
         } catch (Exception e) {
             if (chatServer != null) {
@@ -109,9 +115,12 @@ public final class ServerRuntime {
         if (!config.aiEnabled) {
             return "未启用";
         }
-        if (config.aiApiKey == null || config.aiApiKey.trim().isEmpty()) {
+        if (!AiResponderFactory.isConfigured(config)) {
             return "已开启但未配置 API Key";
         }
-        return "已启用，模型 " + config.aiModel;
+        if (!isRunning()) {
+            return "已启用（服务未运行）";
+        }
+        return "已启用，模型 " + config.aiModel + "，成员 " + config.aiName;
     }
 }
