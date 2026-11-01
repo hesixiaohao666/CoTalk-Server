@@ -12,6 +12,7 @@ import server.ServerConfigStore;
 import server.ServerEvents;
 import server.ServerRuntime;
 import server.ServerSettingsDialog;
+import server.VersionPolicy;
 import store.AvatarStore;
 import store.ConnectionLogStore;
 import store.Database;
@@ -20,6 +21,7 @@ import store.RoomStore;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -43,12 +45,16 @@ public class CoTalkServer extends JFrame {
 
     private final JLabel statusLabel = new JLabel("未启动");
     private final JLabel portLabel = new JLabel("端口 4700");
+    private final JLabel portValueLabel = new JLabel("4700");
     private final JLabel roomLabel = new JLabel("CoTalk 大厅");
     private final JLabel serverIpLabel = new JLabel("检测中…");
     private final JLabel memberCountLabel = new JLabel("0 人");
     private final JLabel storageLabel = new JLabel("未打开");
-    private final JLabel aiLabel = new JLabel("未启用");
+    private final JTextArea aiValue = new JTextArea(2, 18);
+    private final TitledBorder memberBorder =
+            BorderFactory.createTitledBorder("在线成员");
     private final DefaultListModel<String> memberModel = new DefaultListModel<>();
+    private JPanel memberListPanel;
     private final JTextArea logArea = new JTextArea();
     private final JTextField broadcastField = new JTextField(30);
     private final JButton startButton = new JButton("启动服务");
@@ -88,6 +94,10 @@ public class CoTalkServer extends JFrame {
 
         @Override
         public void onServerAddress(String address) {
+            if (address == null || address.startsWith("127.")
+                    || "0.0.0.0".equals(address) || address.contains(":")) {
+                return;
+            }
             SwingUtilities.invokeLater(() -> serverIpLabel.setText(address));
         }
     };
@@ -170,37 +180,28 @@ public class CoTalkServer extends JFrame {
         left.setBorder(new EmptyBorder(16, 16, 16, 8));
         left.setBackground(new Color(0xF5F5F5));
 
-        JPanel info = new JPanel(new GridLayout(6, 2, 8, 8));
-        info.setOpaque(false);
-        info.setBorder(BorderFactory.createTitledBorder("房间信息"));
-        info.add(label("房间", boldFont));
-        info.add(roomLabel);
-        info.add(label("服务器 IP", boldFont));
-        serverIpLabel.setText(findServerIp());
-        serverIpLabel.setFont(baseFont);
-        info.add(serverIpLabel);
-        info.add(label("状态", boldFont));
-        info.add(statusLabelMirror());
-        info.add(label("在线", boldFont));
-        memberCountLabel.setFont(baseFont);
-        info.add(memberCountLabel);
-        info.add(label("存储", boldFont));
-        storageLabel.setFont(baseFont);
-        info.add(storageLabel);
-        info.add(label("AI", boldFont));
-        aiLabel.setFont(baseFont);
-        info.add(aiLabel);
+        JPanel info = buildRoomInfo(baseFont, boldFont);
+
+        JPanel members = new JPanel(new BorderLayout());
+        members.setOpaque(true);
+        members.setBackground(Color.WHITE);
+        members.setBorder(BorderFactory.createCompoundBorder(
+                memberBorder, new EmptyBorder(6, 8, 8, 8)));
+        memberListPanel = members;
 
         JList<String> memberList = new JList<>(memberModel);
         memberList.setFont(baseFont);
-        memberList.setFixedCellHeight(36);
+        memberList.setFixedCellHeight(38);
         memberList.setBackground(Color.WHITE);
+        memberList.setCellRenderer(new MemberCellRenderer());
         memberModel.addElement("（暂无在线成员）");
         JScrollPane memberScroll = new JScrollPane(memberList);
-        memberScroll.setBorder(BorderFactory.createTitledBorder("在线成员"));
+        memberScroll.setBorder(null);
+        memberScroll.getViewport().setBackground(Color.WHITE);
+        members.add(memberScroll, BorderLayout.CENTER);
 
         left.add(info, BorderLayout.NORTH);
-        left.add(memberScroll, BorderLayout.CENTER);
+        left.add(members, BorderLayout.CENTER);
 
         logArea.setEditable(false);
         // 日志里包含中文；Consolas 不含中文字形，会导致“□□”/乱码。
@@ -214,10 +215,121 @@ public class CoTalkServer extends JFrame {
         logScroll.setBorder(BorderFactory.createTitledBorder("服务器日志"));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, logScroll);
-        splitPane.setDividerLocation(360);
+        splitPane.setDividerLocation(390);
         splitPane.setResizeWeight(0.0);
         splitPane.setBorder(new EmptyBorder(10, 10, 0, 10));
         return splitPane;
+    }
+
+    private JPanel buildRoomInfo(Font baseFont, Font boldFont) {
+        JPanel info = new JPanel(new GridBagLayout());
+        info.setOpaque(true);
+        info.setBackground(Color.WHITE);
+        info.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createTitledBorder("房间信息"),
+                new EmptyBorder(8, 12, 10, 12)));
+
+        roomLabel.setFont(baseFont);
+        serverIpLabel.setText(findServerIp());
+        serverIpLabel.setFont(baseFont);
+        portValueLabel.setFont(baseFont);
+        memberCountLabel.setFont(baseFont);
+        storageLabel.setFont(baseFont);
+        aiValue.setEditable(false);
+        aiValue.setOpaque(false);
+        aiValue.setFocusable(false);
+        aiValue.setLineWrap(true);
+        aiValue.setWrapStyleWord(true);
+        aiValue.setBorder(null);
+        aiValue.setMargin(new Insets(0, 0, 0, 0));
+        aiValue.setFont(baseFont);
+        aiValue.setRows(3);
+        aiValue.setText("未启用");
+
+        int row = 0;
+        addInfoRow(info, row++, "房间", roomLabel, boldFont, baseFont);
+        addInfoRow(info, row++, "服务器 IP", serverIpLabel, boldFont, baseFont);
+        addInfoRow(info, row++, "端口", portValueLabel, boldFont, baseFont);
+        addInfoRow(info, row++, "协议", label(
+                String.valueOf(VersionPolicy.PROTOCOL_VERSION), baseFont),
+                boldFont, baseFont);
+        addInfoRow(info, row++, "状态", statusLabelMirror(), boldFont, baseFont);
+        addInfoRow(info, row++, "在线", memberCountLabel, boldFont, baseFont);
+        addInfoRow(info, row++, "存储", storageLabel, boldFont, baseFont);
+        addInfoRow(info, row, "AI", aiValue, boldFont, baseFont);
+        return info;
+    }
+
+    private void addInfoRow(JPanel panel,
+                            int row,
+                            String name,
+                            JComponent value,
+                            Font labelFont,
+                            Font valueFont) {
+        JLabel label = new JLabel(name);
+        label.setFont(labelFont);
+
+        GridBagConstraints labelConstraints = new GridBagConstraints();
+        labelConstraints.gridx = 0;
+        labelConstraints.gridy = row;
+        labelConstraints.anchor = GridBagConstraints.NORTHWEST;
+        labelConstraints.insets = new Insets(0, 0, 6, 12);
+        panel.add(label, labelConstraints);
+
+        value.setFont(valueFont);
+        GridBagConstraints valueConstraints = new GridBagConstraints();
+        valueConstraints.gridx = 1;
+        valueConstraints.gridy = row;
+        valueConstraints.weightx = 1;
+        valueConstraints.fill = GridBagConstraints.HORIZONTAL;
+        valueConstraints.anchor = GridBagConstraints.NORTHWEST;
+        valueConstraints.insets = new Insets(0, 0, 6, 0);
+        panel.add(value, valueConstraints);
+    }
+
+    private static final class MemberCellRenderer
+            extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list,
+                                                      Object value,
+                                                      int index,
+                                                      boolean isSelected,
+                                                      boolean cellHasFocus) {
+            JLabel label = (JLabel) super.getListCellRendererComponent(
+                    list, value, index, isSelected, cellHasFocus);
+            label.setBorder(new EmptyBorder(6, 10, 6, 10));
+            label.setOpaque(true);
+            label.setBackground(isSelected
+                    ? list.getSelectionBackground() : Color.WHITE);
+
+            String text = String.valueOf(value);
+            if (text.startsWith("（")) {
+                label.setText(text);
+                label.setForeground(new Color(0x999999));
+                return label;
+            }
+
+            boolean ai = text.endsWith(" [AI]");
+            String name = ai
+                    ? text.substring(0, text.length() - " [AI]".length())
+                    : text;
+            String html = "<html><span style='color:#4CAF50'>●</span>"
+                    + "&nbsp;&nbsp;<b>" + escapeHtml(name) + "</b>";
+            if (ai) {
+                html += "&nbsp;&nbsp;<span style='color:#33B5E5;font-size:10px'>"
+                        + "[AI]</span>";
+            }
+            label.setText(html + "</html>");
+            label.setForeground(isSelected
+                    ? list.getSelectionForeground() : new Color(0x333333));
+            return label;
+        }
+
+        private static String escapeHtml(String value) {
+            return value.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;");
+        }
     }
 
     private JPanel buildFooter(Font baseFont, Font boldFont) {
@@ -295,6 +407,7 @@ public class CoTalkServer extends JFrame {
             ServerConfigStore.LoadResult configResult = ServerConfigStore.loadOrCreate();
             config = configResult.config;
             portLabel.setText("端口 " + config.port);
+            portValueLabel.setText(String.valueOf(config.port));
             if (configResult.created) {
                 appendLog("已生成配置文件：" + configResult.path);
             }
@@ -308,7 +421,9 @@ public class CoTalkServer extends JFrame {
 
             roomLabel.setText(runtime.getRoom().name);
             storageLabel.setText("SQLite 已连接");
-            aiLabel.setText(runtime.getAiStatus());
+            aiValue.setText(formatAiStatus(runtime.getAiStatus()));
+            aiValue.setCaretPosition(0);
+            updateMembers(runtime.getMembers());
             stopButton.setEnabled(true);
 
             appendLog("服务已启动，端口 " + config.port
@@ -355,6 +470,7 @@ public class CoTalkServer extends JFrame {
         boolean running = runtime != null && runtime.isRunning();
         if (!running) {
             portLabel.setText("端口 " + saved.port);
+            portValueLabel.setText(String.valueOf(saved.port));
             appendLog("配置将在下次启动服务时生效。");
             return;
         }
@@ -387,16 +503,29 @@ public class CoTalkServer extends JFrame {
         statusLabel.setText("已停止");
         storageLabel.setText("未打开");
         roomLabel.setText("CoTalk 大厅");
-        aiLabel.setText("未启用");
+        aiValue.setText("未启用");
         memberCountLabel.setText("0 人");
+        memberBorder.setTitle("在线成员");
         memberModel.clear();
         memberModel.addElement("（暂无在线成员）");
         startButton.setEnabled(true);
         stopButton.setEnabled(false);
     }
 
+    private static String formatAiStatus(String status) {
+        return status == null ? "" : status
+                .replace("，模型 ", "\n模型 ")
+                .replace("，成员 ", "\n成员 ");
+    }
+
     private void updateMembers(List<Member> members) {
         memberModel.clear();
+        memberBorder.setTitle(members.isEmpty()
+                ? "在线成员"
+                : "在线成员（" + members.size() + "）");
+        if (memberListPanel != null) {
+            memberListPanel.repaint();
+        }
         if (members.isEmpty()) {
             memberModel.addElement("（暂无在线成员）");
         } else {

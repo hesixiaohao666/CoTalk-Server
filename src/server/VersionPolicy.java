@@ -8,7 +8,7 @@ public final class VersionPolicy {
     public static final int PROTOCOL_VERSION = 2000;
 
     public static final int MIN_CLIENT_VERSION_CODE = 2000;
-    public static final int MAX_CLIENT_VERSION_CODE = 2999;
+    public static final int MAX_CLIENT_VERSION_CODE = 2099;
 
     public static final String SERVER_VERSION_NAME = "0.2.0(beta)";
 

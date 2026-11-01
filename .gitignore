@@ -29,7 +29,36 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-### CoTalk runtime ###
+### IDE / local project files ###
+.idea/
+*.iml
+
+### CoTalk runtime and local secrets ###
 config.properties
 data/
 logs/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+
+### Signing, keys, environment files ###
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+keystore.properties
+signing.properties
+secrets.properties
+.env
+.env.*
+
+### Build/archive artifacts ###
+*.apk
+*.aab
+*.hprof
+
+### OS files ###
+Thumbs.db
