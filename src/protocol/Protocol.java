@@ -7,7 +7,12 @@ import com.google.gson.JsonObject;
  */
 public final class Protocol {
 
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
+
+    public static final String HELLO = "hello";
+    public static final String AUTH_CHALLENGE = "auth_challenge";
+    public static final String AUTH_RESPONSE = "auth_response";
+    public static final String HELLO_OK = "hello_ok";
 
     public static final String JOIN = "join";
     public static final String CHAT = "chat";
@@ -37,6 +42,12 @@ public final class Protocol {
     public static final int ERR_VERSION = 2008;
     public static final int ERR_UNSUPPORTED = 2009;
     public static final int ERR_FULL = 2010;
+
+    public static final int ERR_AUTH_FAILED = 3001;
+    public static final int ERR_CLIENT_VERSION = 3002;
+    public static final int ERR_PROTOCOL = 3003;
+    public static final int ERR_HELLO_TIMEOUT = 3004;
+    public static final int ERR_AUTH_TIMEOUT = 3005;
 
     private Protocol() {
     }

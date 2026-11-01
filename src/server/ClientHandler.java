@@ -18,18 +18,33 @@ import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.sql.SQLException;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 /**
  * 单客户端连接：按行读取 NDJSON，处理 join/leave/ping。
  * 消息、历史、资料、头像在后续 Step 扩展。
  */
 public class ClientHandler implements Runnable {
+
+    private static final int HANDSHAKE_TIMEOUT_MS = 5000;
+
+    private enum State {
+        CONNECTED,
+        WAIT_AUTH,
+        AUTHENTICATED,
+        JOINED
+    }
 
     private final Socket socket;
     private final ChatServer server;
@@ -52,6 +67,8 @@ public class ClientHandler implements Runnable {
     private BufferedReader reader;
     private BufferedWriter writer;
     private volatile boolean joined;
+    private volatile State state = State.CONNECTED;
+    private byte[] nonce;
     private Member member;
     private String clientTag = "";
     private long rateWindowStart;
@@ -80,7 +97,7 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
         try {
-            socket.setSoTimeout(config.joinTimeoutMs);
+            socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
             reader = new BufferedReader(new InputStreamReader(
                     socket.getInputStream(), StandardCharsets.UTF_8));
             writer = new BufferedWriter(new OutputStreamWriter(
@@ -102,8 +119,18 @@ public class ClientHandler implements Runnable {
                 }
             }
         } catch (SocketTimeoutException e) {
-            if (!joined) {
-                server.getEvents().onLog("连接超时未 join：" + ip);
+            if (state == State.CONNECTED) {
+                send(Protocol.error(Protocol.ERR_HELLO_TIMEOUT,
+                        "hello 超时", null));
+                server.getEvents().onLog("hello 超时：" + ip);
+            } else if (state == State.WAIT_AUTH) {
+                send(Protocol.error(Protocol.ERR_AUTH_TIMEOUT,
+                        "密钥验证超时", null));
+                server.getEvents().onLog("密钥验证超时：" + ip);
+            } else if (state == State.AUTHENTICATED) {
+                server.getEvents().onLog("join 超时：" + ip);
+            } else {
+                server.getEvents().onLog("心跳超时：" + ip);
             }
         } catch (IOException e) {
             if (!closed.get()) {
@@ -126,8 +153,8 @@ public class ClientHandler implements Runnable {
         String reqId = optString(frame, "reqId", "");
 
         if (version != Protocol.VERSION) {
-            send(Protocol.error(Protocol.ERR_VERSION,
-                    "协议版本不匹配", reqId));
+            send(Protocol.error(Protocol.ERR_PROTOCOL,
+                    "协议版本不兼容，请升级客户端", reqId));
             return false;
         }
 
@@ -135,7 +162,25 @@ public class ClientHandler implements Runnable {
                 ? frame.getAsJsonObject("data")
                 : new JsonObject();
 
-        if (!joined) {
+        if (state == State.CONNECTED) {
+            if (Protocol.HELLO.equals(type)) {
+                return handleHello(data, reqId);
+            }
+            send(Protocol.error(Protocol.ERR_AUTH_FAILED,
+                    "请先完成密钥验证", reqId));
+            return false;
+        }
+
+        if (state == State.WAIT_AUTH) {
+            if (Protocol.AUTH_RESPONSE.equals(type)) {
+                return handleAuthResponse(data, reqId);
+            }
+            send(Protocol.error(Protocol.ERR_AUTH_FAILED,
+                    "请完成密钥验证", reqId));
+            return false;
+        }
+
+        if (state == State.AUTHENTICATED) {
             if (Protocol.JOIN.equals(type)) {
                 handleJoin(data, reqId);
                 return !closed.get();
@@ -172,6 +217,95 @@ public class ClientHandler implements Runnable {
                         "不支持的请求类型", reqId));
                 return true;
         }
+    }
+
+    private boolean handleHello(JsonObject data, String reqId) {
+        int clientVersionCode = data.has("clientVersionCode")
+                && data.get("clientVersionCode").isJsonPrimitive()
+                ? data.get("clientVersionCode").getAsInt()
+                : -1;
+        String clientVersionName = optString(data, "clientVersionName", "");
+
+        if (!VersionPolicy.isClientVersionSupported(clientVersionCode)) {
+            send(Protocol.error(Protocol.ERR_CLIENT_VERSION,
+                    "客户端版本不在允许范围（"
+                            + VersionPolicy.MIN_CLIENT_VERSION_CODE + "–"
+                            + VersionPolicy.MAX_CLIENT_VERSION_CODE + "）",
+                    reqId));
+            return false;
+        }
+
+        nonce = new byte[16];
+        new SecureRandom().nextBytes(nonce);
+        state = State.WAIT_AUTH;
+
+        try {
+            socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
+        } catch (IOException ignored) {
+            // 保持原超时
+        }
+
+        JsonObject challenge = new JsonObject();
+        challenge.addProperty("nonce",
+                Base64.getEncoder().encodeToString(nonce));
+        challenge.addProperty("serverVersion", VersionPolicy.SERVER_VERSION_NAME);
+        challenge.addProperty("minClientVersionCode",
+                VersionPolicy.MIN_CLIENT_VERSION_CODE);
+        challenge.addProperty("maxClientVersionCode",
+                VersionPolicy.MAX_CLIENT_VERSION_CODE);
+        send(Protocol.frame(Protocol.AUTH_CHALLENGE, reqId, challenge));
+
+        String versionName = clientVersionName.length() > 40
+                ? clientVersionName.substring(0, 40)
+                : clientVersionName;
+        server.getEvents().onLog("客户端版本 " + clientVersionCode
+                + "（" + versionName + "）请求密钥验证");
+        return true;
+    }
+
+    private boolean handleAuthResponse(JsonObject data, String reqId) {
+        if (state != State.WAIT_AUTH || nonce == null) {
+            return false;
+        }
+        String proof = optString(data, "proof", "");
+        boolean valid = false;
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(
+                    config.authKey.getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"));
+            byte[] expected = mac.doFinal(nonce);
+            byte[] actual = Base64.getDecoder().decode(proof);
+            valid = MessageDigest.isEqual(expected, actual);
+        } catch (Exception e) {
+            valid = false;
+        }
+
+        nonce = null;
+        if (!valid) {
+            send(Protocol.error(Protocol.ERR_AUTH_FAILED,
+                    "连接密钥错误", reqId));
+            return false;
+        }
+
+        state = State.AUTHENTICATED;
+        try {
+            socket.setSoTimeout(config.joinTimeoutMs);
+        } catch (IOException ignored) {
+            // 保持原超时
+        }
+
+        JsonObject ok = new JsonObject();
+        ok.addProperty("serverVersion", VersionPolicy.SERVER_VERSION_NAME);
+        ok.addProperty("protocolVersion", VersionPolicy.PROTOCOL_VERSION);
+        ok.addProperty("minClientVersionCode",
+                VersionPolicy.MIN_CLIENT_VERSION_CODE);
+        ok.addProperty("maxClientVersionCode",
+                VersionPolicy.MAX_CLIENT_VERSION_CODE);
+        ok.addProperty("aiEnabled", config.aiEnabled);
+        send(Protocol.frame(Protocol.HELLO_OK, reqId, ok));
+        server.getEvents().onLog("密钥验证通过：" + ip);
+        return true;
     }
 
     private void handleJoin(JsonObject data, String reqId) {
@@ -225,6 +359,7 @@ public class ClientHandler implements Runnable {
             }
         }
         joined = true;
+        state = State.JOINED;
 
         try {
             socket.setSoTimeout(config.heartbeatTimeoutMs);
