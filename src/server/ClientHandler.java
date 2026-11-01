@@ -38,7 +38,7 @@ public class ClientHandler implements Runnable {
     private final MessageService messageService;
     private final AvatarService avatarService;
     private final ServerConfig config;
-    private final String ip;
+    private String ip;
     private final Object writeLock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final LinkedHashMap<String, Ack> recentAcks =
@@ -205,6 +205,12 @@ public class ClientHandler implements Runnable {
             tag = tag.substring(0, 128);
         }
         clientTag = tag;
+
+        String reportedIp = optString(data, "clientIp", "").trim();
+        if (!reportedIp.isEmpty()) {
+            ip = reportedIp;
+        }
+        server.getEvents().onLog("客户端连接，IP：" + ip);
 
         member = roomService.join(nickname, ip);
         if (avatarData != null) {

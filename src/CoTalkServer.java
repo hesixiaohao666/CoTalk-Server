@@ -369,35 +369,76 @@ public class CoTalkServer extends JFrame {
      * 找一个本机局域网 IPv4，用于房间信息展示；连接后会用本次连接的服务端本地地址更新。
      */
     private static String findServerIp() {
+        String bestIp = null;
+        int bestScore = Integer.MIN_VALUE;
+        String fallbackIp = null;
+
         try {
-            String fallback = null;
             for (NetworkInterface networkInterface
                     : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (!networkInterface.isUp() || networkInterface.isLoopback()) {
+                if (!networkInterface.isUp()
+                        || networkInterface.isLoopback()
+                        || networkInterface.isPointToPoint()) {
                     continue;
                 }
+                String interfaceName = String.valueOf(
+                        networkInterface.getDisplayName() + " "
+                                + networkInterface.getName()).toLowerCase();
+                if (isVirtualInterface(interfaceName)) {
+                    continue;
+                }
+
                 for (InterfaceAddress interfaceAddress
                         : networkInterface.getInterfaceAddresses()) {
                     InetAddress address = interfaceAddress.getAddress();
                     if (!(address instanceof Inet4Address)
-                            || address.isLoopbackAddress()) {
+                            || address.isLoopbackAddress()
+                            || address.isLinkLocalAddress()) {
                         continue;
                     }
-                    if (address.isSiteLocalAddress()) {
-                        return address.getHostAddress();
+
+                    int score = address.isSiteLocalAddress() ? 20 : 0;
+                    if (containsAny(interfaceName,
+                            "wi-fi", "wifi", "wlan", "wireless", "无线")) {
+                        score += 100;
+                    } else if (containsAny(interfaceName,
+                            "以太网", "ethernet", "eth", "en")) {
+                        score += 80;
                     }
-                    if (fallback == null) {
-                        fallback = address.getHostAddress();
+
+                    if (fallbackIp == null) {
+                        fallbackIp = address.getHostAddress();
+                    }
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestIp = address.getHostAddress();
                     }
                 }
             }
-            if (fallback != null) {
-                return fallback;
-            }
         } catch (Exception ignored) {
-            // 使用回环地址兜底
+            // 使用兜底地址
         }
-        return "127.0.0.1";
+
+        if (bestIp != null) {
+            return bestIp;
+        }
+        return fallbackIp == null ? "127.0.0.1" : fallbackIp;
+    }
+
+    private static boolean isVirtualInterface(String name) {
+        return containsAny(name,
+                "vmware", "vmnet", "virtualbox", "vbox", "hyper-v",
+                "vethernet", "wsl", "docker", "tailscale", "zerotier",
+                "bluetooth", "tap", "tun", "vpn", "npcap");
+    }
+
+    private static boolean containsAny(String value, String... keywords) {
+        for (String keyword : keywords) {
+            if (value.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -84,8 +84,6 @@ public class ChatServer {
                         socket, this, roomService, connectionLogStore,
                         messageService, avatarService, config);
                 handlers.add(handler);
-                events.onLog("客户端连接，IP："
-                        + socket.getInetAddress().getHostAddress());
                 clientPool.execute(handler);
             } catch (IOException e) {
                 if (running) {
