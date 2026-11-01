@@ -21,8 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * TCP 服务端：accept、在线连接管理、成员广播。
- * Step 3 只处理 join/leave/ping；消息在 Step 4 接入。
+ * TCP 服务端：连接管理、成员广播、消息广播与 AI 钩子。
  */
 public class ChatServer {
 

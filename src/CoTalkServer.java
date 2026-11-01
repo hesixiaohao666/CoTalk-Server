@@ -33,7 +33,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * CoTalk 服务端：Swing 控制台 + Step 3 网络/数据库接入。
+ * CoTalk 服务端：Swing 控制台、TCP 群聊、SQLite 持久化与 AI 预留。
  */
 public class CoTalkServer extends JFrame {
 

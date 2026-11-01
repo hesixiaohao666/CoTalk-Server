@@ -1,7 +1,7 @@
 package model;
 
 /**
- * 消息模型。Step 3 先建骨架，Step 4 使用。
+ * 服务端消息模型。
  */
 public class Message {
 

@@ -9,9 +9,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * 服务端 SQLite 连接与建表。
- *
- * <p>Step 3 打开数据库、建四张表；Step 4 写入消息；Step 8 写入头像。</p>
+ * 服务端 SQLite：房间、消息、头像版本与连接日志。
  */
 public class Database implements AutoCloseable {
 
