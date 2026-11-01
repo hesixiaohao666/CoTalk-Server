@@ -1,3 +1,5 @@
+import ai.AiResponder;
+import ai.AiResponderFactory;
 import model.Member;
 import model.Room;
 import server.AvatarService;
@@ -295,10 +297,11 @@ public class CoTalkServer extends JFrame {
             MessageService messageService = new MessageService(messageStore);
             AvatarService avatarService = new AvatarService(
                     new AvatarStore(database), config.avatarMaxBytes);
+            AiResponder aiResponder = AiResponderFactory.create(config);
             RoomService roomService = new RoomService(room);
             chatServer = new ChatServer(
                     config, roomService, logStore, messageService,
-                    avatarService, events);
+                    avatarService, aiResponder, events);
             chatServer.start();
 
             roomLabel.setText(room.name);
@@ -490,6 +493,7 @@ public class CoTalkServer extends JFrame {
             MessageService messageService = new MessageService(messageStore);
             AvatarService avatarService = new AvatarService(
                     new AvatarStore(database), config.avatarMaxBytes);
+            AiResponder aiResponder = AiResponderFactory.create(config);
             RoomService roomService = new RoomService(room);
 
             ServerEvents events = new ServerEvents() {
@@ -516,7 +520,7 @@ public class CoTalkServer extends JFrame {
 
             server = new ChatServer(
                     config, roomService, logStore, messageService,
-                    avatarService, events);
+                    avatarService, aiResponder, events);
             ChatServer finalServer = server;
             Database finalDatabase = database;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {

@@ -1,5 +1,6 @@
 package server;
 
+import ai.AiResponder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Member;
@@ -30,6 +31,7 @@ public class ChatServer {
     private final ConnectionLogStore connectionLogStore;
     private final MessageService messageService;
     private final AvatarService avatarService;
+    private final AiResponder aiResponder;
     private final ServerEvents events;
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
@@ -44,12 +46,14 @@ public class ChatServer {
                       ConnectionLogStore connectionLogStore,
                       MessageService messageService,
                       AvatarService avatarService,
+                      AiResponder aiResponder,
                       ServerEvents events) {
         this.config = config;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
         this.avatarService = avatarService;
+        this.aiResponder = aiResponder;
         this.events = events;
     }
 
@@ -112,6 +116,9 @@ public class ChatServer {
         }
         handlers.clear();
         clientPool.shutdownNow();
+        if (aiResponder != null) {
+            aiResponder.shutdown();
+        }
 
         events.onMembersChanged(Collections.emptyList());
         events.onStatusChanged("已停止");
@@ -196,6 +203,32 @@ public class ChatServer {
         } catch (Exception e) {
             events.onLog("写入系统消息失败：" + e.getMessage());
             broadcastSystem(content);
+        }
+    }
+
+    public void onChatMessage(Member sender, Message message) {
+        if (aiResponder == null) {
+            return;
+        }
+        try {
+            aiResponder.onMessage(
+                    sender,
+                    message,
+                    messageService.recent(10)
+            );
+        } catch (Exception e) {
+            events.onLog("AI 消息钩子异常：" + e.getMessage());
+        }
+    }
+
+    public void onMemberJoined(Member member) {
+        if (aiResponder == null) {
+            return;
+        }
+        try {
+            aiResponder.onMemberJoined(member);
+        } catch (Exception e) {
+            events.onLog("AI 成员钩子异常：" + e.getMessage());
         }
     }
 

@@ -245,6 +245,7 @@ public class ClientHandler implements Runnable {
 
         server.getEvents().onLog(nickname + " 加入，临时 ID " + member.id
                 + "，客户端 IP " + ip);
+        server.onMemberJoined(member);
     }
 
     private void sendJoinOk(String reqId) {
@@ -397,6 +398,7 @@ public class ClientHandler implements Runnable {
                     ? content.substring(0, 40) + "…"
                     : content;
             server.getEvents().onLog(member.nickname + ": " + preview);
+            server.onChatMessage(member, message);
         } catch (Exception e) {
             send(Protocol.error(Protocol.ERR_DB,
                     "消息保存失败，请稍后重试", reqId));
