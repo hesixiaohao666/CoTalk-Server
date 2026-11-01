@@ -62,8 +62,16 @@ public class ServerSettingsDialog extends JDialog {
         bindActions();
         setSize(780, 680);
         setMinimumSize(new Dimension(700, 580));
-        setLocationRelativeTo(owner);
+        positionTopCenter();
         applyFont(getContentPane(), uiFont(Font.PLAIN, 14));
+    }
+
+    private void positionTopCenter() {
+        Rectangle bounds = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getMaximumWindowBounds();
+        int x = bounds.x + Math.max(0, (bounds.width - getWidth()) / 2);
+        int y = bounds.y + Math.max(24, (int) (bounds.height * 0.06));
+        setLocation(x, y);
     }
 
     public ServerConfig showDialog() {
@@ -160,7 +168,7 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 3，最多 10");
         addRow(form, row++, "多条间隔 (ms)", aiReplyDelayField, "默认 600");
         addNote(form, row,
-                "AI 仅在被 @ 时回复；修改 AI 配置后需要重启服务。");
+                "被 @ 时必定回复；未被 @ 的提及由 AI 判断是否参与；修改 AI 配置后需要重启服务。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);

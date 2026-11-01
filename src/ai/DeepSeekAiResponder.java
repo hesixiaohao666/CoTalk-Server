@@ -20,14 +20,18 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AI 群友：仅处理 @ 消息；3 秒窗口内合并；单线程调用并发送短消息。
+ * AI 群友：@ 消息必须回复；未被 @ 的提及由 AI 自行决定是否回复。
+ * 3 秒窗口内合并，单线程调用并发送短消息。
  */
 public class DeepSeekAiResponder implements AiResponder {
+
+    private static final String MANDATORY_FALLBACK = "我在，怎么啦？";
 
     private final ServerConfig config;
     private final DeepSeekClient client;
     private final AiReplySink sink;
-    private final List<String> mentions;
+    private final List<String> directMentions;
+    private final List<String> optionalMentions;
 
     private final Object lock = new Object();
     private final ScheduledExecutorService scheduler =
@@ -44,7 +48,8 @@ public class DeepSeekAiResponder implements AiResponder {
 
     private ScheduledFuture<?> pendingTask;
     private List<Message> pendingContext = Collections.emptyList();
-    private final List<String> pendingMentions = new ArrayList<>();
+    private final List<String> pendingMessages = new ArrayList<>();
+    private boolean pendingMandatory;
     private boolean inFlight;
     private volatile boolean closed;
 
@@ -54,7 +59,10 @@ public class DeepSeekAiResponder implements AiResponder {
         this.config = config;
         this.client = client;
         this.sink = sink;
-        this.mentions = splitMentions(config.aiMentions);
+        List<String> configuredMentions = splitMentions(config.aiMentions);
+        this.directMentions = directMentions(configuredMentions);
+        this.optionalMentions = optionalMentions(
+                config.aiName, configuredMentions);
     }
 
     @Override
@@ -69,24 +77,28 @@ public class DeepSeekAiResponder implements AiResponder {
         if (closed || sender == null || message == null || sender.ai) {
             return;
         }
-        boolean mentioned = containsMention(message.content);
+        boolean mandatory = containsAny(message.content, directMentions);
+        boolean optional = containsAny(message.content, optionalMentions);
 
         synchronized (lock) {
             if (closed) {
                 return;
             }
-            // 防抖窗口内即使出现非 @ 消息，也应进入 AI 的最新上下文。
+            // 防抖窗口内即使出现非触发消息，也应进入 AI 的最新上下文。
             pendingContext = recentContext == null
                     ? Collections.emptyList()
                     : new ArrayList<>(recentContext);
-            if (!mentioned) {
+            if (!mandatory && !optional) {
                 return;
             }
-            String mention = sender.nickname + "：" + message.content.trim();
-            if (mention.length() > 500) {
-                mention = mention.substring(0, 500) + "…";
+            String line = sender.nickname + "：" + message.content.trim();
+            if (line.length() > 500) {
+                line = line.substring(0, 500) + "…";
             }
-            pendingMentions.add(mention);
+            pendingMessages.add(line);
+            if (mandatory) {
+                pendingMandatory = true;
+            }
 
             if (pendingTask != null) {
                 pendingTask.cancel(false);
@@ -109,7 +121,8 @@ public class DeepSeekAiResponder implements AiResponder {
                 pendingTask.cancel(false);
                 pendingTask = null;
             }
-            pendingMentions.clear();
+            pendingMessages.clear();
+            pendingMandatory = false;
             pendingContext = Collections.emptyList();
         }
         scheduler.shutdownNow();
@@ -118,31 +131,39 @@ public class DeepSeekAiResponder implements AiResponder {
 
     private void dispatch() {
         List<Message> context;
-        List<String> mergedMentions;
+        List<String> mergedMessages;
+        boolean mandatory;
         synchronized (lock) {
             if (closed) {
                 return;
             }
             pendingTask = null;
-            if (inFlight || pendingMentions.isEmpty()) {
-                // 请求进行中收到的 @ 先留在 pending，等本轮结束后合并再发。
+            if (inFlight || pendingMessages.isEmpty()) {
+                // 请求进行中收到的消息先留在 pending，等本轮结束后合并再发。
                 return;
             }
             inFlight = true;
             context = pendingContext;
             pendingContext = Collections.emptyList();
-            mergedMentions = new ArrayList<>(pendingMentions);
-            pendingMentions.clear();
+            mergedMessages = new ArrayList<>(pendingMessages);
+            pendingMessages.clear();
+            mandatory = pendingMandatory;
+            pendingMandatory = false;
         }
-        worker.execute(() -> respond(mergedMentions, context));
+        worker.execute(() -> respond(mergedMessages, context, mandatory));
     }
 
-    private void respond(List<String> mergedMentions, List<Message> context) {
+    private void respond(List<String> mergedMessages,
+                         List<Message> context,
+                         boolean mandatory) {
         try {
             String raw = client.chatCompletion(
-                    buildRequestMessages(mergedMentions, context));
+                    buildRequestMessages(mergedMessages, context, mandatory));
             ParsedReply reply = parseReply(raw);
             if (reply == null || !reply.send || reply.messages.isEmpty()) {
+                if (mandatory) {
+                    sendMandatoryFallback();
+                }
                 return;
             }
 
@@ -159,19 +180,33 @@ public class DeepSeekAiResponder implements AiResponder {
             Thread.currentThread().interrupt();
         } catch (IllegalArgumentException e) {
             sink.reportError("AI 输出格式无效：" + e.getMessage());
-            sink.reportFailure(config.aiName + "刚才没有组织好回答，请再试一次");
+            if (mandatory) {
+                sendMandatoryFallback();
+            }
         } catch (Exception e) {
             sink.reportError("AI 调用失败：" + e.getMessage());
-            sink.reportFailure(config.aiName + "暂时无法回复，请稍后再试");
+            if (mandatory) {
+                sink.reportFailure(config.aiName + "暂时无法回复，请稍后再试");
+            }
         } finally {
             finishRequest();
+        }
+    }
+
+    private void sendMandatoryFallback() {
+        sink.reportError("AI 未按强制回复要求输出，使用兜底回复");
+        try {
+            sink.appendAiMessage(MANDATORY_FALLBACK);
+        } catch (Exception e) {
+            sink.reportError("AI 兜底回复发送失败：" + e.getMessage());
+            sink.reportFailure(config.aiName + "暂时无法回复，请稍后再试");
         }
     }
 
     private void finishRequest() {
         synchronized (lock) {
             inFlight = false;
-            if (closed || pendingMentions.isEmpty() || pendingTask != null) {
+            if (closed || pendingMessages.isEmpty() || pendingTask != null) {
                 return;
             }
             pendingTask = scheduler.schedule(
@@ -179,10 +214,13 @@ public class DeepSeekAiResponder implements AiResponder {
         }
     }
 
-    private List<AiMessage> buildRequestMessages(List<String> mergedMentions,
-                                                 List<Message> context) {
+    private List<AiMessage> buildRequestMessages(List<String> mergedMessages,
+                                                 List<Message> context,
+                                                 boolean mandatory) {
         List<AiMessage> result = new ArrayList<>();
         result.add(new AiMessage("system", config.aiPrompt
+                + "\n回复规则：被 @ 时必须回复至少一条；未被 @ 的提及可自主判断，"
+                + "只有确实有必要参与时才回复，否则 send=false。"
                 + "\n当前限制：每条最多" + config.aiMessageMaxChars
                 + "个字符，最多" + config.aiMaxMessages
                 + "条；只输出 json 对象，不要输出解释。"));
@@ -205,11 +243,16 @@ public class DeepSeekAiResponder implements AiResponder {
             }
         }
 
-        if (!mergedMentions.isEmpty()) {
+        if (!mergedMessages.isEmpty()) {
             StringBuilder prompt = new StringBuilder();
-            prompt.append("以下消息提到了你，请合并后只回复一次：\n");
-            for (String mention : mergedMentions) {
-                prompt.append(mention).append('\n');
+            if (mandatory) {
+                prompt.append("以下消息包含对你的 @，必须合并回复一次：\n");
+            } else {
+                prompt.append("以下消息提到了你（未 @），请判断是否有必要参与；"
+                        + "没有必要时输出 {\"send\":false,\"messages\":[]}：\n");
+            }
+            for (String message : mergedMessages) {
+                prompt.append(message).append('\n');
             }
             result.add(new AiMessage("user", prompt.toString().trim()));
         }
@@ -356,17 +399,48 @@ public class DeepSeekAiResponder implements AiResponder {
         return first == '{' || first == '[';
     }
 
-    private boolean containsMention(String content) {
-        if (content == null || content.isEmpty() || mentions.isEmpty()) {
+    private static boolean containsAny(String content, List<String> keywords) {
+        if (content == null || content.isEmpty() || keywords.isEmpty()) {
             return false;
         }
         String lower = content.toLowerCase(Locale.ROOT);
-        for (String mention : mentions) {
-            if (lower.contains(mention.toLowerCase(Locale.ROOT))) {
+        for (String keyword : keywords) {
+            if (lower.contains(keyword.toLowerCase(Locale.ROOT))) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static List<String> directMentions(List<String> configured) {
+        List<String> result = new ArrayList<>();
+        for (String mention : configured) {
+            if (mention.startsWith("@") && mention.length() > 1
+                    && !result.contains(mention)) {
+                result.add(mention);
+            }
+        }
+        return result;
+    }
+
+    private static List<String> optionalMentions(String aiName,
+                                                 List<String> configured) {
+        List<String> result = new ArrayList<>();
+        addOptionalMention(result, aiName);
+        for (String mention : configured) {
+            String name = mention.startsWith("@")
+                    ? mention.substring(1).trim()
+                    : mention.trim();
+            addOptionalMention(result, name);
+        }
+        return result;
+    }
+
+    private static void addOptionalMention(List<String> result, String value) {
+        if (value != null && !value.trim().isEmpty()
+                && !result.contains(value.trim())) {
+            result.add(value.trim());
+        }
     }
 
     private static List<String> splitMentions(String value) {

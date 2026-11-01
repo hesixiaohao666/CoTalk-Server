@@ -7,7 +7,7 @@ import com.google.gson.JsonObject;
  */
 public final class Protocol {
 
-    public static final int VERSION = 2;
+    public static final int VERSION = 2000;
 
     public static final String HELLO = "hello";
     public static final String AUTH_CHALLENGE = "auth_challenge";

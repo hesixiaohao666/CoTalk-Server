@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * CoTalk 服务端：Swing 控制台、TCP 群聊、SQLite 持久化与 AI 预留。
+ * CoTalk 服务端：Swing 控制台、TCP 群聊、SQLite 持久化与 AI 群友。
  */
 public class CoTalkServer extends JFrame {
 
@@ -47,7 +47,7 @@ public class CoTalkServer extends JFrame {
     private final JLabel serverIpLabel = new JLabel("检测中…");
     private final JLabel memberCountLabel = new JLabel("0 人");
     private final JLabel storageLabel = new JLabel("未打开");
-    private final JLabel aiLabel = new JLabel("未启用（预留）");
+    private final JLabel aiLabel = new JLabel("未启用");
     private final DefaultListModel<String> memberModel = new DefaultListModel<>();
     private final JTextArea logArea = new JTextArea();
     private final JTextField broadcastField = new JTextField(30);
