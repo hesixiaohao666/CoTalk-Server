@@ -7,6 +7,7 @@ import server.ChatServer;
 import server.MessageService;
 import server.RoomService;
 import server.ServerConfig;
+import server.ServerConfigStore;
 import server.ServerEvents;
 import store.AvatarStore;
 import store.ConnectionLogStore;
@@ -286,7 +287,15 @@ public class CoTalkServer extends JFrame {
         startButton.setEnabled(false);
         statusLabel.setText("启动中…");
         try {
-            config = ServerConfig.load();
+            ServerConfigStore.LoadResult configResult = ServerConfigStore.loadOrCreate();
+            config = configResult.config;
+            if (configResult.created) {
+                appendLog("已生成配置文件：" + configResult.path);
+            }
+            if (configResult.keyGenerated) {
+                appendLog("已生成连接密钥：" + configResult.generatedKey
+                        + "（请复制到客户端）");
+            }
             database = new Database(config.dbPath);
             database.open();
 
@@ -482,7 +491,13 @@ public class CoTalkServer extends JFrame {
         Database database = null;
         ChatServer server = null;
         try {
-            ServerConfig config = ServerConfig.load();
+            ServerConfigStore.LoadResult configResult = ServerConfigStore.loadOrCreate();
+            ServerConfig config = configResult.config;
+            System.out.println("[CoTalk] 配置文件：" + configResult.path);
+            if (configResult.keyGenerated) {
+                System.out.println("[CoTalk] 已生成连接密钥："
+                        + configResult.generatedKey + "（请复制到客户端）");
+            }
             database = new Database(config.dbPath);
             database.open();
 
