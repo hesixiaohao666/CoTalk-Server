@@ -1,0 +1,12 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="CoTalkServer">
+    <output-path>$PROJECT_DIR$/out/artifacts/CoTalkServer</output-path>
+    <root id="archive" name="CoTalkServerProject.jar">
+      <element id="module-output" name="CoTalkServerProject" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/lib/slf4j-api-2.0.13.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/lib/slf4j-simple-2.0.13.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/lib/sqlite-jdbc-3.46.1.3.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/lib/gson-2.11.0.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>
