@@ -22,6 +22,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
+    private static final String CONFIG_VERSION = "2";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -55,6 +56,7 @@ public final class ServerConfigStore {
         boolean created = !Files.exists(path);
         boolean promptMigrated = false;
         boolean newKeysMissing = false;
+        boolean configUpgraded = false;
         if (!created) {
             Properties loaded = new Properties();
             try (BufferedReader reader = Files.newBufferedReader(
@@ -80,6 +82,24 @@ public final class ServerConfigStore {
             newKeysMissing = !loaded.containsKey("ai.keywords")
                     || !loaded.containsKey("ai.keywordChance")
                     || !loaded.containsKey("ai.randomChance");
+
+            if (!loaded.containsKey("config.version")) {
+                // v0.2.1 早期默认值：随机 5%、3 条、每条 20 字。
+                // 未自定义的旧文件在这里统一升级到 20%、5 条、30 字。
+                if ("5".equals(loaded.getProperty(
+                        "ai.randomChance", "").trim())) {
+                    merged.setProperty("ai.randomChance", "20");
+                }
+                if ("3".equals(loaded.getProperty(
+                        "ai.maxMessages", "").trim())) {
+                    merged.setProperty("ai.maxMessages", "5");
+                }
+                if ("20".equals(loaded.getProperty(
+                        "ai.messageMaxChars", "").trim())) {
+                    merged.setProperty("ai.messageMaxChars", "30");
+                }
+                configUpgraded = true;
+            }
         }
 
         String key = merged.getProperty("auth.key", "").trim();
@@ -94,7 +114,8 @@ public final class ServerConfigStore {
         ServerConfig config = new ServerConfig(merged);
         validate(config);
 
-        if (created || keyGenerated || promptMigrated || newKeysMissing) {
+        if (created || keyGenerated || promptMigrated
+                || newKeysMissing || configUpgraded) {
             saveProperties(merged, path);
         }
         return new LoadResult(
@@ -172,7 +193,8 @@ public final class ServerConfigStore {
                     temp, StandardCharsets.UTF_8)) {
                 writer.write("# CoTalk v"
                         + ServerVersion.VERSION_NAME + " configuration\n");
-                writer.write("# 首次启动自动生成；可手动编辑或通过可视化设置修改。\n\n");
+                writer.write("# 首次启动自动生成；可手动编辑或通过可视化设置修改。\n");
+                writer.write("config.version=" + CONFIG_VERSION + "\n\n");
                 write(writer, properties, "server.port");
                 write(writer, properties, "server.maxClients");
                 write(writer, properties, "server.joinTimeoutMs");

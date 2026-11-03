@@ -183,8 +183,8 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "上下文条数", aiMaxContextField, null);
         addRow(form, row++, "请求超时 (ms)", aiTimeoutField, null);
         addRow(form, row++, "maxTokens", aiMaxTokensField, null);
-        addRow(form, row++, "单条最大字符", aiMessageMaxCharsField, "默认 20");
-        addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 3，最多 10");
+        addRow(form, row++, "单条最大字符", aiMessageMaxCharsField, "默认 30");
+        addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 5，最多 10");
         addRow(form, row++, "多条间隔 (ms)", aiReplyDelayField, "默认 600");
         addNote(form, row,
                 "强制提示词固定包含交流方式、法律道德底线和输出格式；"

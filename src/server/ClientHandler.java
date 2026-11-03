@@ -360,14 +360,21 @@ public class ClientHandler implements Runnable {
                 return;
             }
         }
-        joined = true;
-        state = State.JOINED;
-
         try {
             socket.setSoTimeout(config.heartbeatTimeoutMs);
         } catch (IOException ignored) {
             // 保持原超时
         }
+
+        // 必须先发送 join_ok，再把 joined 置为 true。
+        // 否则其他客户端同时广播 member_list 时，可能抢在 join_ok 前到达新客户端。
+        sendJoinOk(reqId);
+        if (closed.get()) {
+            roomService.leave(member.id);
+            return;
+        }
+        joined = true;
+        state = State.JOINED;
 
         try {
             connectionLogStore.insert(member.id, ip, member.connectedAt);
@@ -375,7 +382,6 @@ public class ClientHandler implements Runnable {
             server.getEvents().onLog("写入连接日志失败：" + e.getMessage());
         }
 
-        sendJoinOk(reqId);
         server.broadcastMemberList();
         server.broadcastSystemMessage(nickname + " 加入了群聊");
         server.notifyMembersChanged();
