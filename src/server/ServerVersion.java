@@ -5,8 +5,8 @@ package server;
  */
 public final class ServerVersion {
 
-    public static final int VERSION_CODE = 2010;
-    public static final String VERSION_NAME = "0.2.1(beta)";
+    public static final int VERSION_CODE = 2011;
+    public static final String VERSION_NAME = "0.2.2(beta)";
 
     private ServerVersion() {
     }
