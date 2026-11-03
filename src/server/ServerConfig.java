@@ -1,20 +1,13 @@
 package server;
 
+import ai.AiPrompts;
+
 import java.util.Properties;
 
 /**
  * 服务端配置快照。读取、生成、保存统一由 ServerConfigStore 负责。
  */
 public class ServerConfig {
-
-    public static final String DEFAULT_AI_PROMPT =
-            "你是CoTalk群聊里的AI群友“大肥鱼”，性格活泼，用中文交流，不冒充人类。"
-                    + "被 @ 时必须回复；未被 @ 但有人提到你时，"
-                    + "只有确实有必要参与才回复，否则不回复。"
-                    + "只输出JSON，不要输出推理或解释。"
-                    + "JSON格式：{\"send\":true,\"messages\":[\"短消息1\",\"短消息2\"]}；"
-                    + "每条不超过20个字符，最多3条；不想回复时输出"
-                    + "{\"send\":false,\"messages\":[]}。";
 
     public final int port;
     public final int maxClients;
@@ -35,7 +28,7 @@ public class ServerConfig {
     public final String aiModel;
     public final String aiBaseUrl;
     public final boolean aiThinking;
-    public final String aiPrompt;
+    public final String aiPromptCustom;
     public final String aiMentions;
     public final int aiCooldownMs;
     public final int aiMaxContext;
@@ -69,7 +62,7 @@ public class ServerConfig {
         aiBaseUrl = value(properties, "ai.baseUrl",
                 "https://api.deepseek.com/chat/completions");
         aiThinking = Boolean.parseBoolean(value(properties, "ai.thinking", "false"));
-        aiPrompt = value(properties, "ai.prompt", DEFAULT_AI_PROMPT);
+        aiPromptCustom = customPrompt(properties);
         aiMentions = value(properties, "ai.mentions", "@大肥鱼,@AI");
         aiCooldownMs = intValue(properties, "ai.cooldownMs", 3000);
         aiMaxContext = intValue(properties, "ai.maxContext", 10);
@@ -108,7 +101,7 @@ public class ServerConfig {
         properties.setProperty("ai.baseUrl",
                 "https://api.deepseek.com/chat/completions");
         properties.setProperty("ai.thinking", "false");
-        properties.setProperty("ai.prompt", DEFAULT_AI_PROMPT);
+        properties.setProperty("ai.prompt.custom", AiPrompts.DEFAULT_CUSTOM_PROMPT);
         properties.setProperty("ai.mentions", "@大肥鱼,@AI");
         properties.setProperty("ai.cooldownMs", "3000");
         properties.setProperty("ai.maxContext", "10");
@@ -146,7 +139,7 @@ public class ServerConfig {
         properties.setProperty("ai.model", aiModel);
         properties.setProperty("ai.baseUrl", aiBaseUrl);
         properties.setProperty("ai.thinking", String.valueOf(aiThinking));
-        properties.setProperty("ai.prompt", aiPrompt);
+        properties.setProperty("ai.prompt.custom", aiPromptCustom);
         properties.setProperty("ai.mentions", aiMentions);
         properties.setProperty("ai.cooldownMs", String.valueOf(aiCooldownMs));
         properties.setProperty("ai.maxContext", String.valueOf(aiMaxContext));
@@ -158,6 +151,19 @@ public class ServerConfig {
         properties.setProperty("ai.name", aiName);
         properties.setProperty("ai.avatar", aiAvatar);
         return properties;
+    }
+
+    private static String customPrompt(Properties properties) {
+        String custom = properties.getProperty("ai.prompt.custom", "").trim();
+        if (!custom.isEmpty()) {
+            return custom;
+        }
+        String legacy = properties.getProperty("ai.prompt", "").trim();
+        if (legacy.isEmpty()
+                || AiPrompts.LEGACY_DEFAULT_PROMPT.equals(legacy)) {
+            return AiPrompts.DEFAULT_CUSTOM_PROMPT;
+        }
+        return legacy;
     }
 
     private static String value(Properties properties, String key, String defaultValue) {

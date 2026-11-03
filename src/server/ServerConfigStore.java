@@ -1,5 +1,7 @@
 package server;
 
+import ai.AiPrompts;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -51,6 +53,7 @@ public final class ServerConfigStore {
     public static LoadResult loadOrCreate(Path path) throws IOException {
         Properties merged = ServerConfig.createDefaultProperties();
         boolean created = !Files.exists(path);
+        boolean promptMigrated = false;
         if (!created) {
             Properties loaded = new Properties();
             try (BufferedReader reader = Files.newBufferedReader(
@@ -60,6 +63,19 @@ public final class ServerConfigStore {
                 throw new IOException("配置文件格式错误：" + e.getMessage(), e);
             }
             merged.putAll(loaded);
+
+            String existingCustom = loaded.getProperty(
+                    "ai.prompt.custom", "").trim();
+            if (existingCustom.isEmpty()) {
+                String legacy = loaded.getProperty("ai.prompt", "").trim();
+                String custom = legacy.isEmpty()
+                        || AiPrompts.LEGACY_DEFAULT_PROMPT.equals(legacy)
+                        ? AiPrompts.DEFAULT_CUSTOM_PROMPT
+                        : legacy;
+                merged.setProperty("ai.prompt.custom", custom);
+                merged.remove("ai.prompt");
+                promptMigrated = true;
+            }
         }
 
         String key = merged.getProperty("auth.key", "").trim();
@@ -74,7 +90,7 @@ public final class ServerConfigStore {
         ServerConfig config = new ServerConfig(merged);
         validate(config);
 
-        if (created || keyGenerated) {
+        if (created || keyGenerated || promptMigrated) {
             saveProperties(merged, path);
         }
         return new LoadResult(
@@ -167,7 +183,7 @@ public final class ServerConfigStore {
                 write(writer, properties, "ai.model");
                 write(writer, properties, "ai.baseUrl");
                 write(writer, properties, "ai.thinking");
-                write(writer, properties, "ai.prompt");
+                write(writer, properties, "ai.prompt.custom");
                 write(writer, properties, "ai.mentions");
                 write(writer, properties, "ai.cooldownMs");
                 write(writer, properties, "ai.maxContext");

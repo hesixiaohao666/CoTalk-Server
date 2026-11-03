@@ -218,12 +218,12 @@ public class DeepSeekAiResponder implements AiResponder {
                                                  List<Message> context,
                                                  boolean mandatory) {
         List<AiMessage> result = new ArrayList<>();
-        result.add(new AiMessage("system", config.aiPrompt
-                + "\n回复规则：被 @ 时必须回复至少一条；未被 @ 的提及可自主判断，"
-                + "只有确实有必要参与时才回复，否则 send=false。"
-                + "\n当前限制：每条最多" + config.aiMessageMaxChars
-                + "个字符，最多" + config.aiMaxMessages
-                + "条；只输出 json 对象，不要输出解释。"));
+        result.add(new AiMessage("system", AiPrompts.buildSystemPrompt(
+                config.aiPromptCustom,
+                config.aiMessageMaxChars,
+                config.aiMaxMessages,
+                "回复规则：被 @ 时必须回复至少一条；未被 @ 的提及可自主判断，"
+                        + "只有确实有必要参与时才回复，否则 send=false。")));
 
         int max = Math.max(1, config.aiMaxContext);
         int start = Math.max(0, context.size() - max);

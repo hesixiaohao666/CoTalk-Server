@@ -1,5 +1,7 @@
 package server;
 
+import ai.AiPrompts;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -41,7 +43,8 @@ public class ServerSettingsDialog extends JDialog {
     private final JTextField aiMentionsField = new JTextField(24);
     private final JTextField aiAvatarField = new JTextField(24);
     private final JButton browseAvatarButton = new JButton("浏览…");
-    private final JTextArea aiPromptArea = new JTextArea(6, 36);
+    private final JTextArea aiForcedPromptArea = new JTextArea(5, 36);
+    private final JTextArea aiPromptArea = new JTextArea(5, 36);
     private final JTextField aiCooldownField = new JTextField(10);
     private final JTextField aiMaxContextField = new JTextField(10);
     private final JTextField aiTimeoutField = new JTextField(10);
@@ -154,11 +157,21 @@ public class ServerSettingsDialog extends JDialog {
         avatarRow.add(browseAvatarButton, BorderLayout.EAST);
         addRow(form, row++, "AI 头像", avatarRow, "PNG/JPG 路径");
 
+        aiForcedPromptArea.setLineWrap(true);
+        aiForcedPromptArea.setWrapStyleWord(true);
+        aiForcedPromptArea.setEditable(false);
+        aiForcedPromptArea.setBackground(new Color(0xF2F2F2));
+        JScrollPane forcedPromptScroll = new JScrollPane(aiForcedPromptArea);
+        forcedPromptScroll.setPreferredSize(new Dimension(420, 100));
+        addRow(form, row++, "强制提示词（只读）", forcedPromptScroll,
+                "由程序固定，不可修改");
+
         aiPromptArea.setLineWrap(true);
         aiPromptArea.setWrapStyleWord(true);
         JScrollPane promptScroll = new JScrollPane(aiPromptArea);
-        promptScroll.setPreferredSize(new Dimension(420, 120));
-        addRow(form, row++, "AI 提示词", promptScroll, null);
+        promptScroll.setPreferredSize(new Dimension(420, 100));
+        addRow(form, row++, "自定义提示词", promptScroll,
+                "用于大肥鱼人设和表达风格");
 
         addRow(form, row++, "回复冷却 (ms)", aiCooldownField, null);
         addRow(form, row++, "上下文条数", aiMaxContextField, null);
@@ -168,7 +181,8 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 3，最多 10");
         addRow(form, row++, "多条间隔 (ms)", aiReplyDelayField, "默认 600");
         addNote(form, row,
-                "被 @ 时必定回复；未被 @ 的提及由 AI 判断是否参与；修改 AI 配置后需要重启服务。");
+                "强制提示词固定包含交流方式、法律道德底线和输出格式；"
+                        + "自定义提示词只补充人设。修改 AI 配置后需要重启服务。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);
@@ -266,7 +280,9 @@ public class ServerSettingsDialog extends JDialog {
         aiNameField.setText(original.aiName);
         aiMentionsField.setText(original.aiMentions);
         aiAvatarField.setText(original.aiAvatar);
-        aiPromptArea.setText(original.aiPrompt);
+        aiForcedPromptArea.setText(AiPrompts.FORCED_PROMPT);
+        aiForcedPromptArea.setCaretPosition(0);
+        aiPromptArea.setText(original.aiPromptCustom);
         aiPromptArea.setCaretPosition(0);
         aiCooldownField.setText(String.valueOf(original.aiCooldownMs));
         aiMaxContextField.setText(String.valueOf(original.aiMaxContext));
@@ -355,7 +371,7 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("ai.name", text(aiNameField));
         properties.setProperty("ai.mentions", text(aiMentionsField));
         properties.setProperty("ai.avatar", text(aiAvatarField));
-        properties.setProperty("ai.prompt", aiPromptArea.getText().trim());
+        properties.setProperty("ai.prompt.custom", aiPromptArea.getText().trim());
         properties.setProperty("ai.cooldownMs",
                 String.valueOf(readInt(aiCooldownField, "回复冷却")));
         properties.setProperty("ai.maxContext",
