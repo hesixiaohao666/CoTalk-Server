@@ -162,9 +162,17 @@ public class DeepSeekAiResponder implements AiResponder {
                          List<Message> context,
                          boolean mandatory) {
         try {
-            String raw = client.chatCompletion(
-                    buildRequestMessages(mergedMessages, context, mandatory));
-            ParsedReply reply = parseReply(raw);
+            List<AiMessage> request = buildRequestMessages(
+                    mergedMessages, context, mandatory);
+            String raw = client.chatCompletion(request);
+            ParsedReply reply;
+            try {
+                reply = parseReply(raw);
+            } catch (IllegalArgumentException firstError) {
+                sink.reportError("AI 响应无效，重试一次：" + firstError.getMessage());
+                raw = client.chatCompletion(buildRetryMessages(request));
+                reply = parseReply(raw);
+            }
             if (reply == null || !reply.send || reply.messages.isEmpty()) {
                 if (mandatory) {
                     sendMandatoryFallback();
@@ -196,6 +204,12 @@ public class DeepSeekAiResponder implements AiResponder {
         } finally {
             finishRequest();
         }
+    }
+
+    private List<AiMessage> buildRetryMessages(List<AiMessage> request) {
+        List<AiMessage> retry = new ArrayList<>(request);
+        retry.add(new AiMessage("user", AiPrompts.REPAIR_INSTRUCTION));
+        return retry;
     }
 
     private void sendMandatoryFallback() {
