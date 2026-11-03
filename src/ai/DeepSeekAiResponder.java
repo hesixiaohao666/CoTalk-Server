@@ -17,21 +17,22 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AI 群友：@ 消息必须回复；未被 @ 的提及由 AI 自行决定是否回复。
+ * AI 群友：@ 必回；关键词大概率参与；其他消息小概率随机参与。
  * 3 秒窗口内合并，单线程调用并发送短消息。
  */
 public class DeepSeekAiResponder implements AiResponder {
 
-    private static final String MANDATORY_FALLBACK = "我在，怎么啦？";
+    private static final String MANDATORY_FALLBACK = "这个我暂时不能回答，换个话题吧。";
 
     private final ServerConfig config;
     private final DeepSeekClient client;
     private final AiReplySink sink;
     private final List<String> directMentions;
-    private final List<String> optionalMentions;
+    private final List<String> keywords;
 
     private final Object lock = new Object();
     private final ScheduledExecutorService scheduler =
@@ -61,8 +62,8 @@ public class DeepSeekAiResponder implements AiResponder {
         this.sink = sink;
         List<String> configuredMentions = splitMentions(config.aiMentions);
         this.directMentions = directMentions(configuredMentions);
-        this.optionalMentions = optionalMentions(
-                config.aiName, configuredMentions);
+        this.keywords = keywords(
+                config.aiName, config.aiKeywords, configuredMentions);
     }
 
     @Override
@@ -78,17 +79,21 @@ public class DeepSeekAiResponder implements AiResponder {
             return;
         }
         boolean mandatory = containsAny(message.content, directMentions);
-        boolean optional = containsAny(message.content, optionalMentions);
+        boolean keyword = !mandatory && containsAny(message.content, keywords);
+        boolean triggered = mandatory
+                || (keyword
+                ? hit(config.aiKeywordChance)
+                : hit(config.aiRandomChance));
 
         synchronized (lock) {
             if (closed) {
                 return;
             }
-            // 防抖窗口内即使出现非触发消息，也应进入 AI 的最新上下文。
+            // 防抖窗口内即使未触发回复，也应进入 AI 的最新上下文。
             pendingContext = recentContext == null
                     ? Collections.emptyList()
                     : new ArrayList<>(recentContext);
-            if (!mandatory && !optional) {
+            if (!triggered) {
                 return;
             }
             String line = sender.nickname + "：" + message.content.trim();
@@ -222,8 +227,9 @@ public class DeepSeekAiResponder implements AiResponder {
                 config.aiPromptCustom,
                 config.aiMessageMaxChars,
                 config.aiMaxMessages,
-                "回复规则：被 @ 时必须回复至少一条；未被 @ 的提及可自主判断，"
-                        + "只有确实有必要参与时才回复，否则 send=false。")));
+                "回复规则：被 @ 时必须回复至少一条；被关键词或随机触发时"
+                        + "可自主判断，只有确实有必要参与时才回复，否则 send=false；"
+                        + "遇到违法违规或违背道德的内容必须拒绝。")));
 
         int max = Math.max(1, config.aiMaxContext);
         int start = Math.max(0, context.size() - max);
@@ -248,7 +254,7 @@ public class DeepSeekAiResponder implements AiResponder {
             if (mandatory) {
                 prompt.append("以下消息包含对你的 @，必须合并回复一次：\n");
             } else {
-                prompt.append("以下消息提到了你（未 @），请判断是否有必要参与；"
+                prompt.append("以下消息触发了你的参与判断，请判断是否有必要参与；"
                         + "没有必要时输出 {\"send\":false,\"messages\":[]}：\n");
             }
             for (String message : mergedMessages) {
@@ -423,24 +429,38 @@ public class DeepSeekAiResponder implements AiResponder {
         return result;
     }
 
-    private static List<String> optionalMentions(String aiName,
-                                                 List<String> configured) {
+    private static List<String> keywords(String aiName,
+                                          String configuredKeywords,
+                                          List<String> mentions) {
         List<String> result = new ArrayList<>();
-        addOptionalMention(result, aiName);
-        for (String mention : configured) {
+        addKeyword(result, aiName);
+        for (String keyword : splitMentions(configuredKeywords)) {
+            addKeyword(result, keyword);
+        }
+        for (String mention : mentions) {
             String name = mention.startsWith("@")
                     ? mention.substring(1).trim()
                     : mention.trim();
-            addOptionalMention(result, name);
+            addKeyword(result, name);
         }
         return result;
     }
 
-    private static void addOptionalMention(List<String> result, String value) {
+    private static void addKeyword(List<String> result, String value) {
         if (value != null && !value.trim().isEmpty()
                 && !result.contains(value.trim())) {
             result.add(value.trim());
         }
+    }
+
+    private static boolean hit(int percent) {
+        if (percent <= 0) {
+            return false;
+        }
+        if (percent >= 100) {
+            return true;
+        }
+        return ThreadLocalRandom.current().nextInt(100) < percent;
     }
 
     private static List<String> splitMentions(String value) {

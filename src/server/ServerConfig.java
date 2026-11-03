@@ -30,6 +30,9 @@ public class ServerConfig {
     public final boolean aiThinking;
     public final String aiPromptCustom;
     public final String aiMentions;
+    public final String aiKeywords;
+    public final int aiKeywordChance;
+    public final int aiRandomChance;
     public final int aiCooldownMs;
     public final int aiMaxContext;
     public final int aiTimeoutMs;
@@ -64,6 +67,9 @@ public class ServerConfig {
         aiThinking = Boolean.parseBoolean(value(properties, "ai.thinking", "false"));
         aiPromptCustom = customPrompt(properties);
         aiMentions = value(properties, "ai.mentions", "@大肥鱼,@AI");
+        aiKeywords = value(properties, "ai.keywords", "大肥鱼,鱼,AI");
+        aiKeywordChance = intValue(properties, "ai.keywordChance", 80);
+        aiRandomChance = intValue(properties, "ai.randomChance", 5);
         aiCooldownMs = intValue(properties, "ai.cooldownMs", 3000);
         aiMaxContext = intValue(properties, "ai.maxContext", 10);
         aiTimeoutMs = intValue(properties, "ai.timeoutMs", 20000);
@@ -103,6 +109,9 @@ public class ServerConfig {
         properties.setProperty("ai.thinking", "false");
         properties.setProperty("ai.prompt.custom", AiPrompts.DEFAULT_CUSTOM_PROMPT);
         properties.setProperty("ai.mentions", "@大肥鱼,@AI");
+        properties.setProperty("ai.keywords", "大肥鱼,鱼,AI");
+        properties.setProperty("ai.keywordChance", "80");
+        properties.setProperty("ai.randomChance", "5");
         properties.setProperty("ai.cooldownMs", "3000");
         properties.setProperty("ai.maxContext", "10");
         properties.setProperty("ai.timeoutMs", "20000");
@@ -141,6 +150,9 @@ public class ServerConfig {
         properties.setProperty("ai.thinking", String.valueOf(aiThinking));
         properties.setProperty("ai.prompt.custom", aiPromptCustom);
         properties.setProperty("ai.mentions", aiMentions);
+        properties.setProperty("ai.keywords", aiKeywords);
+        properties.setProperty("ai.keywordChance", String.valueOf(aiKeywordChance));
+        properties.setProperty("ai.randomChance", String.valueOf(aiRandomChance));
         properties.setProperty("ai.cooldownMs", String.valueOf(aiCooldownMs));
         properties.setProperty("ai.maxContext", String.valueOf(aiMaxContext));
         properties.setProperty("ai.timeoutMs", String.valueOf(aiTimeoutMs));

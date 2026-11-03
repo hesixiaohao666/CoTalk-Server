@@ -54,6 +54,7 @@ public final class ServerConfigStore {
         Properties merged = ServerConfig.createDefaultProperties();
         boolean created = !Files.exists(path);
         boolean promptMigrated = false;
+        boolean newKeysMissing = false;
         if (!created) {
             Properties loaded = new Properties();
             try (BufferedReader reader = Files.newBufferedReader(
@@ -66,6 +67,7 @@ public final class ServerConfigStore {
 
             String existingCustom = loaded.getProperty(
                     "ai.prompt.custom", "").trim();
+            merged.remove("ai.prompt");
             if (existingCustom.isEmpty()) {
                 String legacy = loaded.getProperty("ai.prompt", "").trim();
                 String custom = legacy.isEmpty()
@@ -73,9 +75,11 @@ public final class ServerConfigStore {
                         ? AiPrompts.DEFAULT_CUSTOM_PROMPT
                         : legacy;
                 merged.setProperty("ai.prompt.custom", custom);
-                merged.remove("ai.prompt");
                 promptMigrated = true;
             }
+            newKeysMissing = !loaded.containsKey("ai.keywords")
+                    || !loaded.containsKey("ai.keywordChance")
+                    || !loaded.containsKey("ai.randomChance");
         }
 
         String key = merged.getProperty("auth.key", "").trim();
@@ -90,7 +94,7 @@ public final class ServerConfigStore {
         ServerConfig config = new ServerConfig(merged);
         validate(config);
 
-        if (created || keyGenerated || promptMigrated) {
+        if (created || keyGenerated || promptMigrated || newKeysMissing) {
             saveProperties(merged, path);
         }
         return new LoadResult(
@@ -134,6 +138,10 @@ public final class ServerConfigStore {
                 || config.aiMaxMessages > 10
                 || config.aiReplyDelayMs < 0) {
             throw new IllegalArgumentException("AI 消息条数/字数配置非法");
+        }
+        if (config.aiKeywordChance < 0 || config.aiKeywordChance > 100
+                || config.aiRandomChance < 0 || config.aiRandomChance > 100) {
+            throw new IllegalArgumentException("AI 参与概率必须在 0–100 之间");
         }
         if (config.aiEnabled
                 && (config.aiModel.isEmpty()
@@ -185,6 +193,9 @@ public final class ServerConfigStore {
                 write(writer, properties, "ai.thinking");
                 write(writer, properties, "ai.prompt.custom");
                 write(writer, properties, "ai.mentions");
+                write(writer, properties, "ai.keywords");
+                write(writer, properties, "ai.keywordChance");
+                write(writer, properties, "ai.randomChance");
                 write(writer, properties, "ai.cooldownMs");
                 write(writer, properties, "ai.maxContext");
                 write(writer, properties, "ai.timeoutMs");

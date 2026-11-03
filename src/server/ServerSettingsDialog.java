@@ -41,6 +41,9 @@ public class ServerSettingsDialog extends JDialog {
     private final JTextField aiBaseUrlField = new JTextField(28);
     private final JTextField aiNameField = new JTextField(16);
     private final JTextField aiMentionsField = new JTextField(24);
+    private final JTextField aiKeywordsField = new JTextField(24);
+    private final JTextField aiKeywordChanceField = new JTextField(8);
+    private final JTextField aiRandomChanceField = new JTextField(8);
     private final JTextField aiAvatarField = new JTextField(24);
     private final JButton browseAvatarButton = new JButton("浏览…");
     private final JTextArea aiForcedPromptArea = new JTextArea(5, 36);
@@ -150,6 +153,9 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "Base URL", aiBaseUrlField, null);
         addRow(form, row++, "AI 昵称", aiNameField, null);
         addRow(form, row++, "@ 触发词", aiMentionsField, "逗号分隔");
+        addRow(form, row++, "参与关键词", aiKeywordsField, "如：大肥鱼,鱼,AI");
+        addRow(form, row++, "关键词概率 (%)", aiKeywordChanceField, "0–100");
+        addRow(form, row++, "随机参与概率 (%)", aiRandomChanceField, "0–100");
 
         JPanel avatarRow = new JPanel(new BorderLayout(6, 0));
         avatarRow.setOpaque(false);
@@ -182,7 +188,8 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "多条间隔 (ms)", aiReplyDelayField, "默认 600");
         addNote(form, row,
                 "强制提示词固定包含交流方式、法律道德底线和输出格式；"
-                        + "自定义提示词只补充人设。修改 AI 配置后需要重启服务。");
+                        + "自定义提示词只补充人设。被 @ 时必须回复，关键词按概率参与，"
+                        + "其他消息按随机概率参与。修改 AI 配置后需要重启服务。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);
@@ -279,6 +286,9 @@ public class ServerSettingsDialog extends JDialog {
         aiBaseUrlField.setText(original.aiBaseUrl);
         aiNameField.setText(original.aiName);
         aiMentionsField.setText(original.aiMentions);
+        aiKeywordsField.setText(original.aiKeywords);
+        aiKeywordChanceField.setText(String.valueOf(original.aiKeywordChance));
+        aiRandomChanceField.setText(String.valueOf(original.aiRandomChance));
         aiAvatarField.setText(original.aiAvatar);
         aiForcedPromptArea.setText(AiPrompts.FORCED_PROMPT);
         aiForcedPromptArea.setCaretPosition(0);
@@ -370,6 +380,11 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("ai.baseUrl", text(aiBaseUrlField));
         properties.setProperty("ai.name", text(aiNameField));
         properties.setProperty("ai.mentions", text(aiMentionsField));
+        properties.setProperty("ai.keywords", text(aiKeywordsField));
+        properties.setProperty("ai.keywordChance",
+                String.valueOf(readInt(aiKeywordChanceField, "关键词概率")));
+        properties.setProperty("ai.randomChance",
+                String.valueOf(readInt(aiRandomChanceField, "随机参与概率")));
         properties.setProperty("ai.avatar", text(aiAvatarField));
         properties.setProperty("ai.prompt.custom", aiPromptArea.getText().trim());
         properties.setProperty("ai.cooldownMs",
