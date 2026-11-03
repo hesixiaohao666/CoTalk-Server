@@ -249,6 +249,7 @@ public class ClientHandler implements Runnable {
         challenge.addProperty("nonce",
                 Base64.getEncoder().encodeToString(nonce));
         challenge.addProperty("serverVersion", ServerVersion.VERSION_NAME);
+        challenge.addProperty("serverVersionCode", ServerVersion.VERSION_CODE);
         challenge.addProperty("minClientVersionCode",
                 VersionPolicy.MIN_CLIENT_VERSION_CODE);
         challenge.addProperty("maxClientVersionCode",
@@ -297,6 +298,7 @@ public class ClientHandler implements Runnable {
 
         JsonObject ok = new JsonObject();
         ok.addProperty("serverVersion", ServerVersion.VERSION_NAME);
+        ok.addProperty("serverVersionCode", ServerVersion.VERSION_CODE);
         ok.addProperty("protocolVersion", VersionPolicy.PROTOCOL_VERSION);
         ok.addProperty("minClientVersionCode",
                 VersionPolicy.MIN_CLIENT_VERSION_CODE);
@@ -417,6 +419,8 @@ public class ClientHandler implements Runnable {
 
         JsonObject serverInfo = new JsonObject();
         serverInfo.addProperty("version", Protocol.VERSION);
+        serverInfo.addProperty("versionName", ServerVersion.VERSION_NAME);
+        serverInfo.addProperty("versionCode", ServerVersion.VERSION_CODE);
         serverInfo.addProperty("aiEnabled", server.isAiActive());
         serverInfo.addProperty("aiName", config.aiName);
         data.add("server", serverInfo);
