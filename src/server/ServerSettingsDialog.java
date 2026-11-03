@@ -182,7 +182,9 @@ public class ServerSettingsDialog extends JDialog {
         JPanel panel = formPanel();
         int row = 0;
         addRow(panel, row++, "服务端版本",
-                readOnlyField(VersionPolicy.SERVER_VERSION_NAME), null);
+                readOnlyField(ServerVersion.VERSION_NAME), null);
+        addRow(panel, row++, "内部版本号",
+                readOnlyField(String.valueOf(ServerVersion.VERSION_CODE)), null);
         addRow(panel, row++, "协议版本",
                 readOnlyField(String.valueOf(VersionPolicy.PROTOCOL_VERSION)), null);
         addRow(panel, row++, "客户端版本区间",

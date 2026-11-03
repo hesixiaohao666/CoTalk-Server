@@ -248,7 +248,7 @@ public class ClientHandler implements Runnable {
         JsonObject challenge = new JsonObject();
         challenge.addProperty("nonce",
                 Base64.getEncoder().encodeToString(nonce));
-        challenge.addProperty("serverVersion", VersionPolicy.SERVER_VERSION_NAME);
+        challenge.addProperty("serverVersion", ServerVersion.VERSION_NAME);
         challenge.addProperty("minClientVersionCode",
                 VersionPolicy.MIN_CLIENT_VERSION_CODE);
         challenge.addProperty("maxClientVersionCode",
@@ -296,7 +296,7 @@ public class ClientHandler implements Runnable {
         }
 
         JsonObject ok = new JsonObject();
-        ok.addProperty("serverVersion", VersionPolicy.SERVER_VERSION_NAME);
+        ok.addProperty("serverVersion", ServerVersion.VERSION_NAME);
         ok.addProperty("protocolVersion", VersionPolicy.PROTOCOL_VERSION);
         ok.addProperty("minClientVersionCode",
                 VersionPolicy.MIN_CLIENT_VERSION_CODE);

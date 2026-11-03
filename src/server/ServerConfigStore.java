@@ -146,7 +146,8 @@ public final class ServerConfigStore {
         try {
             try (BufferedWriter writer = Files.newBufferedWriter(
                     temp, StandardCharsets.UTF_8)) {
-                writer.write("# CoTalk v0.2.0(beta) configuration\n");
+                writer.write("# CoTalk v"
+                        + ServerVersion.VERSION_NAME + " configuration\n");
                 writer.write("# 首次启动自动生成；可手动编辑或通过可视化设置修改。\n\n");
                 write(writer, properties, "server.port");
                 write(writer, properties, "server.maxClients");

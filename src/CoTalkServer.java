@@ -12,6 +12,7 @@ import server.ServerConfigStore;
 import server.ServerEvents;
 import server.ServerRuntime;
 import server.ServerSettingsDialog;
+import server.ServerVersion;
 import server.VersionPolicy;
 import store.AvatarStore;
 import store.ConnectionLogStore;
@@ -109,7 +110,7 @@ public class CoTalkServer extends JFrame {
             e.printStackTrace();
         }
 
-        setTitle("CoTalk 服务器");
+        setTitle("CoTalk 服务器 " + ServerVersion.VERSION_NAME);
         setSize(980, 620);
         setMinimumSize(new Dimension(820, 520));
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -135,7 +136,7 @@ public class CoTalkServer extends JFrame {
             }
         });
 
-        appendLog("CoTalk 服务端已就绪。");
+        appendLog("CoTalk " + ServerVersion.VERSION_NAME + " 服务端已就绪。");
         appendLog("点击“启动服务”后按 config.properties 监听端口。");
     }
 

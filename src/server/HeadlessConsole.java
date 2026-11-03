@@ -43,7 +43,8 @@ public final class HeadlessConsole {
         }
 
         ServerConfig config = result.config;
-        log("CoTalk " + VersionPolicy.SERVER_VERSION_NAME + " 终端模式");
+        log("CoTalk " + ServerVersion.VERSION_NAME
+                + "（" + ServerVersion.VERSION_CODE + "）终端模式");
         log("配置文件：" + result.path);
         if (result.keyGenerated) {
             log("已生成连接密钥：" + result.generatedKey
