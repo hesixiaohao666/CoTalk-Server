@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -12,6 +13,8 @@ import java.sql.Statement;
  * 服务端 SQLite：房间、消息、头像版本与连接日志。
  */
 public class Database implements AutoCloseable {
+
+    private static final int SCHEMA_VERSION = 2;
 
     private final String path;
     private Connection connection;
@@ -38,6 +41,8 @@ public class Database implements AutoCloseable {
             statement.execute("PRAGMA busy_timeout=5000");
             statement.execute("PRAGMA foreign_keys=ON");
 
+            int userVersion = readUserVersion(statement);
+
             statement.execute("CREATE TABLE IF NOT EXISTS room ("
                     + "id INTEGER PRIMARY KEY CHECK (id = 1), "
                     + "name TEXT NOT NULL, "
@@ -55,6 +60,11 @@ public class Database implements AutoCloseable {
                     + "sender_avatar_version INTEGER NOT NULL DEFAULT 0, "
                     + "content TEXT NOT NULL, "
                     + "msg_type TEXT NOT NULL DEFAULT 'text', "
+                    + "file_id TEXT, "
+                    + "file_name TEXT, "
+                    + "file_mime TEXT, "
+                    + "file_size INTEGER NOT NULL DEFAULT 0, "
+                    + "file_expired INTEGER NOT NULL DEFAULT 0, "
                     + "created_at INTEGER NOT NULL"
                     + ")");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_message_seq "
@@ -79,8 +89,56 @@ public class Database implements AutoCloseable {
             statement.execute("CREATE INDEX IF NOT EXISTS idx_conn_user "
                     + "ON connection_log(user_id)");
 
-            statement.execute("PRAGMA user_version=1");
+            statement.execute("CREATE TABLE IF NOT EXISTS attachment ("
+                    + "file_id TEXT PRIMARY KEY, "
+                    + "message_uuid TEXT NOT NULL, "
+                    + "file_name TEXT, "
+                    + "mime TEXT, "
+                    + "size INTEGER NOT NULL DEFAULT 0, "
+                    + "created_at INTEGER NOT NULL, "
+                    + "expired INTEGER NOT NULL DEFAULT 0"
+                    + ")");
+            statement.execute("CREATE INDEX IF NOT EXISTS idx_attachment_message "
+                    + "ON attachment(message_uuid)");
+            statement.execute("CREATE INDEX IF NOT EXISTS idx_attachment_expired "
+                    + "ON attachment(expired, created_at)");
+
+            // v1 -> v2：旧库补齐消息附件字段；全新库的建表语句已包含这些列。
+            addColumnIfMissing(statement, "message", "file_id", "TEXT");
+            addColumnIfMissing(statement, "message", "file_name", "TEXT");
+            addColumnIfMissing(statement, "message", "file_mime", "TEXT");
+            addColumnIfMissing(statement, "message", "file_size",
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(statement, "message", "file_expired",
+                    "INTEGER NOT NULL DEFAULT 0");
+
+            if (userVersion < SCHEMA_VERSION) {
+                statement.execute("PRAGMA user_version=" + SCHEMA_VERSION);
+            }
         }
+    }
+
+    private static int readUserVersion(Statement statement) throws SQLException {
+        try (ResultSet result = statement.executeQuery("PRAGMA user_version")) {
+            return result.next() ? result.getInt(1) : 0;
+        }
+    }
+
+    private static void addColumnIfMissing(Statement statement,
+                                           String table,
+                                           String column,
+                                           String definition)
+            throws SQLException {
+        try (ResultSet result = statement.executeQuery(
+                "PRAGMA table_info(" + table + ")")) {
+            while (result.next()) {
+                if (column.equalsIgnoreCase(result.getString("name"))) {
+                    return;
+                }
+            }
+        }
+        statement.execute("ALTER TABLE " + table
+                + " ADD COLUMN " + column + " " + definition);
     }
 
     public synchronized Connection connection() {
