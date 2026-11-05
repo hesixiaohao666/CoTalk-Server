@@ -98,15 +98,19 @@ public class MessageService {
     }
 
     public List<Message> recent(int limit) throws SQLException {
-        return messageStore.loadRecent(limit);
+        return messageStore.loadRecent(limit, syncCutoff());
     }
 
     public List<Message> before(long beforeSeq, int limit) throws SQLException {
-        return messageStore.before(beforeSeq, limit);
+        return messageStore.before(beforeSeq, limit, syncCutoff());
     }
 
     public List<Message> after(long afterSeq, int limit) throws SQLException {
-        return messageStore.after(afterSeq, limit);
+        return messageStore.after(afterSeq, limit, syncCutoff());
+    }
+
+    private long syncCutoff() {
+        return StoragePolicy.syncCutoff(System.currentTimeMillis());
     }
 
     private String newMsgUuid() {

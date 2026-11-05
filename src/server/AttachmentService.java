@@ -9,8 +9,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
@@ -18,11 +26,13 @@ import java.util.regex.Pattern;
  */
 public class AttachmentService {
 
-    public static final int MAX_ATTACHMENT_BYTES = 1024 * 1024;
+    public static final int MAX_ATTACHMENT_BYTES =
+            StoragePolicy.MAX_ATTACHMENT_BYTES;
 
     private static final Pattern FILE_ID_PATTERN =
             Pattern.compile("f-[0-9a-f]{16}");
     private static final int MAX_FILE_NAME_LENGTH = 80;
+    private static final int CLEANUP_BATCH_SIZE = 200;
 
     public static final class DecodedAttachment {
         public final String mime;
@@ -48,12 +58,83 @@ public class AttachmentService {
         }
     }
 
+    public static final class CleanupResult {
+        public final int deletedFiles;
+        public final long deletedBytes;
+        public final long remainingBytes;
+        public final boolean overLimit;
+
+        CleanupResult(int deletedFiles,
+                      long deletedBytes,
+                      long remainingBytes,
+                      boolean overLimit) {
+            this.deletedFiles = deletedFiles;
+            this.deletedBytes = deletedBytes;
+            this.remainingBytes = remainingBytes;
+            this.overLimit = overLimit;
+        }
+    }
+
     private final AttachmentStore attachmentStore;
     private final Path directory;
+    private final Consumer<String> logger;
+    private final ScheduledExecutorService maintenance =
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "cotalk-attachment-cleaner");
+                thread.setDaemon(true);
+                return thread;
+            });
+    private final AtomicBoolean cleanupQueued = new AtomicBoolean(false);
+    private volatile ScheduledFuture<?> maintenanceTask;
 
-    public AttachmentService(AttachmentStore attachmentStore, Path directory) {
+    public AttachmentService(AttachmentStore attachmentStore,
+                             Path directory,
+                             Consumer<String> logger) {
         this.attachmentStore = attachmentStore;
         this.directory = directory.toAbsolutePath().normalize();
+        this.logger = logger == null ? message -> { } : logger;
+    }
+
+    /**
+     * 启动后每小时检查一次；实际删除只在总量超过 2GB 且附件超过 7 天时发生。
+     */
+    public synchronized void startMaintenance() {
+        if (maintenanceTask != null) {
+            return;
+        }
+        maintenanceTask = maintenance.scheduleWithFixedDelay(
+                this::runScheduledCleanup, 1, 1, TimeUnit.HOURS);
+    }
+
+    /**
+     * 上传后异步触发一次清理检查，避免阻塞消息 ack/广播。
+     */
+    public void requestCleanup() {
+        if (!cleanupQueued.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            maintenance.execute(() -> {
+                try {
+                    cleanupExpired(System.currentTimeMillis());
+                } catch (Exception e) {
+                    log("附件清理失败：" + e.getMessage());
+                } finally {
+                    cleanupQueued.set(false);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            cleanupQueued.set(false);
+        }
+    }
+
+    public void shutdownMaintenance() {
+        ScheduledFuture<?> task = maintenanceTask;
+        maintenanceTask = null;
+        if (task != null) {
+            task.cancel(false);
+        }
+        maintenance.shutdownNow();
     }
 
     public DecodedAttachment decode(String type,
@@ -142,6 +223,11 @@ public class AttachmentService {
         if (attachment.expired) {
             return new FileData(attachment, null, true);
         }
+        // 超过 7 天不再向客户端发送；文件可继续留在磁盘，等待 2GB 超限清理。
+        if (attachment.createdAt < StoragePolicy.syncCutoff(
+                System.currentTimeMillis())) {
+            return new FileData(attachment, null, true);
+        }
 
         Path path = pathFor(fileId);
         if (!Files.isRegularFile(path)) {
@@ -156,14 +242,97 @@ public class AttachmentService {
         return new FileData(attachment, bytes, false);
     }
 
-    public void delete(String fileId) {
-        if (!isValidFileId(fileId)) {
-            return;
+    public CleanupResult cleanupExpired(long now) throws Exception {
+        return cleanupExpired(now, StoragePolicy.MAX_TOTAL_ATTACHMENT_BYTES);
+    }
+
+    /**
+     * 容量超过 maxTotalBytes 时，从最旧的超时附件开始清理，直到低于阈值；
+     * 如果没有更多超时附件，则保留未超时文件并允许暂时超限。
+     */
+    public CleanupResult cleanupExpired(long now, long maxTotalBytes)
+            throws Exception {
+        long total = attachmentStore.totalBytes();
+        if (total <= maxTotalBytes) {
+            return new CleanupResult(0, 0, total, false);
         }
+
+        long cutoff = StoragePolicy.syncCutoff(now);
+        int deletedFiles = 0;
+        long deletedBytes = 0;
+
+        while (total > maxTotalBytes) {
+            List<Attachment> candidates =
+                    attachmentStore.cleanupCandidates(cutoff, CLEANUP_BATCH_SIZE);
+            if (candidates.isEmpty()) {
+                break;
+            }
+            boolean progressed = false;
+            for (Attachment attachment : candidates) {
+                try {
+                    deleteFile(attachment.fileId);
+                } catch (IOException e) {
+                    log("附件文件删除失败 " + attachment.fileId
+                            + "：" + e.getMessage());
+                    continue;
+                }
+                attachmentStore.markExpired(
+                        attachment.fileId, attachment.messageUuid);
+                long size = Math.max(0L, attachment.size);
+                total -= size;
+                deletedBytes += size;
+                deletedFiles++;
+                progressed = true;
+                if (total <= maxTotalBytes) {
+                    break;
+                }
+            }
+            if (!progressed) {
+                break;
+            }
+        }
+
+        boolean overLimit = total > maxTotalBytes;
+        if (deletedFiles > 0) {
+            log("附件清理完成：删除 " + deletedFiles + " 个文件，释放 "
+                    + deletedBytes + " 字节，剩余 " + total + " 字节");
+        }
+        if (overLimit) {
+            log("附件总量仍超过上限，允许暂时超限：当前 " + total
+                    + " 字节，上限 " + maxTotalBytes + " 字节");
+        }
+        return new CleanupResult(
+                deletedFiles, deletedBytes, total, overLimit);
+    }
+
+    public void delete(String fileId) {
         try {
-            Files.deleteIfExists(pathFor(fileId));
+            deleteFile(fileId);
         } catch (IOException ignored) {
             // 清理失败不影响主流程；后续过期清理会再次处理。
+        }
+    }
+
+    private void deleteFile(String fileId) throws IOException {
+        if (!isValidFileId(fileId)) {
+            throw new IllegalArgumentException("fileId 无效");
+        }
+        Files.deleteIfExists(pathFor(fileId));
+    }
+
+    private void runScheduledCleanup() {
+        try {
+            cleanupExpired(System.currentTimeMillis());
+        } catch (Exception e) {
+            log("附件定时清理失败：" + e.getMessage());
+        }
+    }
+
+    private void log(String message) {
+        try {
+            logger.accept(message);
+        } catch (RuntimeException ignored) {
+            // 日志回调异常不能影响清理流程。
         }
     }
 

@@ -28,6 +28,7 @@ public final class ServerRuntime {
     private Room room;
     private RoomService roomService;
     private ChatServer chatServer;
+    private AttachmentService attachmentService;
 
     public ServerRuntime(ServerConfig config, ServerEvents events) {
         this.config = config;
@@ -49,10 +50,15 @@ public final class ServerRuntime {
             MessageService messageService = new MessageService(messageStore);
             AvatarService avatarService = new AvatarService(
                     new AvatarStore(database), config.avatarMaxBytes);
-            Path attachmentDir = Paths.get("data", "attachments");
+            Path attachmentDir = Paths.get(StoragePolicy.ATTACHMENT_DIR);
             Files.createDirectories(attachmentDir);
-            AttachmentService attachmentService = new AttachmentService(
-                    new AttachmentStore(database), attachmentDir);
+            attachmentService = new AttachmentService(
+                    new AttachmentStore(database), attachmentDir, events::onLog);
+            try {
+                attachmentService.cleanupExpired(System.currentTimeMillis());
+            } catch (Exception e) {
+                events.onLog("启动附件清理失败：" + e.getMessage());
+            }
             roomService = new RoomService(room);
             chatServer = new ChatServer(
                     config, roomService, logStore, messageService,
@@ -66,7 +72,12 @@ public final class ServerRuntime {
             chatServer.setAiResponder(
                     AiResponderFactory.create(config, chatServer));
             chatServer.start();
+            attachmentService.startMaintenance();
         } catch (Exception e) {
+            if (attachmentService != null) {
+                attachmentService.shutdownMaintenance();
+                attachmentService = null;
+            }
             if (chatServer != null) {
                 chatServer.stop();
                 chatServer = null;
@@ -83,6 +94,10 @@ public final class ServerRuntime {
         if (chatServer != null) {
             chatServer.stop();
             chatServer = null;
+        }
+        if (attachmentService != null) {
+            attachmentService.shutdownMaintenance();
+            attachmentService = null;
         }
         if (database != null) {
             database.close();

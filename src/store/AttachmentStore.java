@@ -6,6 +6,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 附件元数据表读写。文件本体由 AttachmentService 管理。
@@ -66,7 +68,7 @@ public class AttachmentStore {
     }
 
     /**
-     * 未过期附件总字节数，供 v0.3.0 Step 2 的 2GB 清理策略使用。
+     * 未过期附件总字节数，供 v0.3.0 的 2GB 清理策略使用。
      */
     public long totalBytes() throws SQLException {
         synchronized (database) {
@@ -75,6 +77,30 @@ public class AttachmentStore {
                     "SELECT COALESCE(SUM(size), 0) FROM attachment WHERE expired = 0");
                  ResultSet result = statement.executeQuery()) {
                 return result.next() ? result.getLong(1) : 0L;
+            }
+        }
+    }
+
+    /**
+     * 超过保留期限且尚未清理的附件，按创建时间从旧到新。
+     */
+    public List<Attachment> cleanupCandidates(long cutoff, int limit)
+            throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT " + COLUMNS + " FROM attachment "
+                            + "WHERE expired = 0 AND created_at < ? "
+                            + "ORDER BY created_at ASC LIMIT ?")) {
+                statement.setLong(1, cutoff);
+                statement.setInt(2, limit);
+                List<Attachment> attachments = new ArrayList<>();
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        attachments.add(map(result));
+                    }
+                }
+                return attachments;
             }
         }
     }

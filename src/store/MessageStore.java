@@ -109,13 +109,15 @@ public class MessageStore {
         }
     }
 
-    public List<Message> loadRecent(int limit) throws SQLException {
+    public List<Message> loadRecent(int limit, long cutoff) throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT " + COLUMNS + " FROM message "
+                            + "WHERE created_at >= ? AND file_expired = 0 "
                             + "ORDER BY seq DESC LIMIT ?")) {
-                statement.setInt(1, limit);
+                statement.setLong(1, cutoff);
+                statement.setInt(2, limit);
                 List<Message> messages = readList(statement.executeQuery());
                 Collections.reverse(messages);
                 return messages;
@@ -123,14 +125,18 @@ public class MessageStore {
         }
     }
 
-    public List<Message> before(long beforeSeq, int limit) throws SQLException {
+    public List<Message> before(long beforeSeq, int limit, long cutoff)
+            throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT " + COLUMNS + " FROM message "
-                            + "WHERE seq < ? ORDER BY seq DESC LIMIT ?")) {
+                            + "WHERE seq < ? AND created_at >= ? "
+                            + "AND file_expired = 0 "
+                            + "ORDER BY seq DESC LIMIT ?")) {
                 statement.setLong(1, beforeSeq);
-                statement.setInt(2, limit);
+                statement.setLong(2, cutoff);
+                statement.setInt(3, limit);
                 List<Message> messages = readList(statement.executeQuery());
                 Collections.reverse(messages);
                 return messages;
@@ -138,14 +144,18 @@ public class MessageStore {
         }
     }
 
-    public List<Message> after(long afterSeq, int limit) throws SQLException {
+    public List<Message> after(long afterSeq, int limit, long cutoff)
+            throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT " + COLUMNS + " FROM message "
-                            + "WHERE seq > ? ORDER BY seq ASC LIMIT ?")) {
+                            + "WHERE seq > ? AND created_at >= ? "
+                            + "AND file_expired = 0 "
+                            + "ORDER BY seq ASC LIMIT ?")) {
                 statement.setLong(1, afterSeq);
-                statement.setInt(2, limit);
+                statement.setLong(2, cutoff);
+                statement.setInt(3, limit);
                 return readList(statement.executeQuery());
             }
         }

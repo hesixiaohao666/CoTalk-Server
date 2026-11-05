@@ -591,6 +591,7 @@ public class ClientHandler implements Runnable {
                     member, clientTag, content, type, saved);
             stored = true;
             acceptMessage(clientMsgId, message, reqId, previewFor(type, decoded.fileName));
+            attachmentService.requestCleanup();
         } catch (Exception e) {
             if (saved != null && !stored) {
                 attachmentService.delete(saved.fileId);
