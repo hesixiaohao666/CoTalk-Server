@@ -3,12 +3,16 @@ package server;
 import ai.AiResponderFactory;
 import model.Member;
 import model.Room;
+import store.AttachmentStore;
 import store.AvatarStore;
 import store.ConnectionLogStore;
 import store.Database;
 import store.MessageStore;
 import store.RoomStore;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 
@@ -45,10 +49,14 @@ public final class ServerRuntime {
             MessageService messageService = new MessageService(messageStore);
             AvatarService avatarService = new AvatarService(
                     new AvatarStore(database), config.avatarMaxBytes);
+            Path attachmentDir = Paths.get("data", "attachments");
+            Files.createDirectories(attachmentDir);
+            AttachmentService attachmentService = new AttachmentService(
+                    new AttachmentStore(database), attachmentDir);
             roomService = new RoomService(room);
             chatServer = new ChatServer(
                     config, roomService, logStore, messageService,
-                    avatarService, events);
+                    avatarService, attachmentService, events);
 
             Member aiMember = AiMemberService.prepare(
                     config, avatarService, events);

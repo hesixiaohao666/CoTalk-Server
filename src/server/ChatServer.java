@@ -32,6 +32,7 @@ public class ChatServer implements AiReplySink {
     private final ConnectionLogStore connectionLogStore;
     private final MessageService messageService;
     private final AvatarService avatarService;
+    private final AttachmentService attachmentService;
     private final ServerEvents events;
     private volatile AiResponder aiResponder = new NoopAiResponder();
 
@@ -47,12 +48,14 @@ public class ChatServer implements AiReplySink {
                       ConnectionLogStore connectionLogStore,
                       MessageService messageService,
                       AvatarService avatarService,
+                      AttachmentService attachmentService,
                       ServerEvents events) {
         this.config = config;
         this.roomService = roomService;
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
         this.avatarService = avatarService;
+        this.attachmentService = attachmentService;
         this.events = events;
     }
 
@@ -96,7 +99,7 @@ public class ChatServer implements AiReplySink {
                 events.onServerAddress(socket.getLocalAddress().getHostAddress());
                 ClientHandler handler = new ClientHandler(
                         socket, this, roomService, connectionLogStore,
-                        messageService, avatarService, config);
+                        messageService, avatarService, attachmentService, config);
                 handlers.add(handler);
                 clientPool.execute(handler);
             } catch (IOException e) {
@@ -305,6 +308,15 @@ public class ChatServer implements AiReplySink {
         json.addProperty("senderAvatarVersion", message.senderAvatarVersion);
         json.addProperty("content", message.content);
         json.addProperty("type", message.type);
+        if (message.fileId != null && !message.fileId.isEmpty()) {
+            json.addProperty("fileId", message.fileId);
+            json.addProperty("fileName",
+                    message.fileName == null ? "" : message.fileName);
+            json.addProperty("fileMime",
+                    message.fileMime == null ? "" : message.fileMime);
+            json.addProperty("fileSize", message.fileSize);
+            json.addProperty("fileExpired", message.fileExpired);
+        }
         json.addProperty("ts", message.createdAt);
         if (includeSelf) {
             json.addProperty("self", self);

@@ -249,7 +249,8 @@ public class DeepSeekAiResponder implements AiResponder {
         int start = Math.max(0, context.size() - max);
         for (int i = start; i < context.size(); i++) {
             Message message = context.get(i);
-            if (message == null || message.content == null) {
+            if (message == null || message.content == null
+                    || message.content.trim().isEmpty()) {
                 continue;
             }
             if ("system".equals(message.type)) {

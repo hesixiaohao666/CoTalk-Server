@@ -19,6 +19,7 @@ public final class Protocol {
     public static final String HISTORY_REQ = "history_req";
     public static final String PROFILE_UPDATE = "profile_update";
     public static final String AVATAR_REQ = "avatar_req";
+    public static final String FILE_REQ = "file_req";
     public static final String PING = "ping";
     public static final String LEAVE = "leave";
 
@@ -28,6 +29,7 @@ public final class Protocol {
     public static final String HISTORY_RES = "history_res";
     public static final String MEMBER_LIST = "member_list";
     public static final String AVATAR_RES = "avatar_res";
+    public static final String FILE_RES = "file_res";
     public static final String SYSTEM = "system";
     public static final String ERROR = "error";
     public static final String PONG = "pong";

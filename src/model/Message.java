@@ -13,5 +13,10 @@ public class Message {
     public int senderAvatarVersion;
     public String content;
     public String type = "text";
+    public String fileId;
+    public String fileName;
+    public String fileMime;
+    public long fileSize;
+    public boolean fileExpired;
     public long createdAt;
 }

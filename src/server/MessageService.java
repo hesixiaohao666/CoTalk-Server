@@ -1,5 +1,6 @@
 package server;
 
+import model.Attachment;
 import model.Member;
 import model.Message;
 import store.MessageStore;
@@ -24,6 +25,15 @@ public class MessageService {
     public synchronized Message createAndStore(Member sender,
                                                 String clientTag,
                                                 String content) throws SQLException {
+        return createAndStore(sender, clientTag, content, "text", null);
+    }
+
+    public synchronized Message createAndStore(Member sender,
+                                                String clientTag,
+                                                String content,
+                                                String type,
+                                                Attachment attachment)
+            throws SQLException {
         Message message = new Message();
         message.msgUuid = newMsgUuid();
         message.seq = nextSeq;
@@ -31,11 +41,19 @@ public class MessageService {
         message.senderName = sender.nickname;
         message.senderTag = clientTag;
         message.senderAvatarVersion = sender.avatarVersion;
-        message.content = content;
-        message.type = "text";
+        message.content = content == null ? "" : content;
+        message.type = type == null || type.isEmpty() ? "text" : type;
         message.createdAt = System.currentTimeMillis();
+        if (attachment != null) {
+            attachment.messageUuid = message.msgUuid;
+            message.fileId = attachment.fileId;
+            message.fileName = attachment.fileName;
+            message.fileMime = attachment.mime;
+            message.fileSize = attachment.size;
+            message.fileExpired = attachment.expired;
+        }
 
-        messageStore.insert(message);
+        messageStore.insert(message, attachment);
         nextSeq++;
         return message;
     }

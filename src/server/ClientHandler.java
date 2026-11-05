@@ -2,6 +2,7 @@ package server;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import model.Attachment;
 import model.Avatar;
 import model.Member;
 import model.Message;
@@ -24,6 +25,7 @@ import java.sql.SQLException;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,6 +54,7 @@ public class ClientHandler implements Runnable {
     private final ConnectionLogStore connectionLogStore;
     private final MessageService messageService;
     private final AvatarService avatarService;
+    private final AttachmentService attachmentService;
     private final ServerConfig config;
     private String ip;
     private final Object writeLock = new Object();
@@ -80,6 +83,7 @@ public class ClientHandler implements Runnable {
                          ConnectionLogStore connectionLogStore,
                          MessageService messageService,
                          AvatarService avatarService,
+                         AttachmentService attachmentService,
                          ServerConfig config) {
         this.socket = socket;
         this.server = server;
@@ -87,6 +91,7 @@ public class ClientHandler implements Runnable {
         this.connectionLogStore = connectionLogStore;
         this.messageService = messageService;
         this.avatarService = avatarService;
+        this.attachmentService = attachmentService;
         this.config = config;
         // accepted socket 的 getInetAddress() 是远端地址，即客户端 IP。
         this.ip = socket.getInetAddress() == null
@@ -211,6 +216,9 @@ public class ClientHandler implements Runnable {
                 return true;
             case Protocol.AVATAR_REQ:
                 handleAvatarRequest(data, reqId);
+                return true;
+            case Protocol.FILE_REQ:
+                handleFileRequest(data, reqId);
                 return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
@@ -522,32 +530,137 @@ public class ClientHandler implements Runnable {
             return;
         }
 
+        String type = optString(data, "type", "text")
+                .trim().toLowerCase(Locale.ROOT);
+        if (type.isEmpty()) {
+            type = "text";
+        }
         String content = optString(data, "content", "").trim();
-        if (content.isEmpty() || content.length() > 1000) {
+
+        if ("text".equals(type)) {
+            if (content.isEmpty() || content.length() > 1000) {
+                send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                        "消息需为 1–1000 个字符", reqId));
+                return;
+            }
+            try {
+                Message message = messageService.createAndStore(
+                        member, clientTag, content);
+                acceptMessage(clientMsgId, message, reqId, content);
+                server.onChatMessage(member, message);
+            } catch (Exception e) {
+                send(Protocol.error(Protocol.ERR_DB,
+                        "消息保存失败，请稍后重试", reqId));
+                server.getEvents().onLog("消息落库失败：" + e.getMessage());
+            }
+            return;
+        }
+
+        if (!"image".equals(type) && !"emoji".equals(type)
+                && !"voice".equals(type)) {
+            send(Protocol.error(Protocol.ERR_UNSUPPORTED,
+                    "不支持的消息类型", reqId));
+            return;
+        }
+        if (content.length() > 1000) {
             send(Protocol.error(Protocol.ERR_INVALID_INPUT,
-                    "消息需为 1–1000 个字符", reqId));
+                    "消息文字不能超过 1000 个字符", reqId));
+            return;
+        }
+
+        AttachmentService.DecodedAttachment decoded;
+        try {
+            decoded = attachmentService.decode(
+                    type,
+                    optString(data, "data", ""),
+                    optString(data, "mime", ""),
+                    optString(data, "fileName", "")
+            );
+        } catch (IllegalArgumentException e) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    e.getMessage(), reqId));
+            return;
+        }
+
+        Attachment saved = null;
+        boolean stored = false;
+        try {
+            saved = attachmentService.save(
+                    decoded.bytes, decoded.mime, decoded.fileName);
+            Message message = messageService.createAndStore(
+                    member, clientTag, content, type, saved);
+            stored = true;
+            acceptMessage(clientMsgId, message, reqId, previewFor(type, decoded.fileName));
+        } catch (Exception e) {
+            if (saved != null && !stored) {
+                attachmentService.delete(saved.fileId);
+            }
+            send(Protocol.error(Protocol.ERR_DB,
+                    "附件消息保存失败，请稍后重试", reqId));
+            server.getEvents().onLog("附件消息落库失败：" + e.getMessage());
+        }
+    }
+
+    private void acceptMessage(String clientMsgId,
+                               Message message,
+                               String reqId,
+                               String logPreview) {
+        Ack ack = new Ack(clientMsgId, message);
+        recentAcks.put(clientMsgId, ack);
+        sendAck(ack, reqId);
+        server.broadcastMessage(message, this);
+        server.getEvents().onLog(member.nickname + ": " + logPreview);
+    }
+
+    private static String previewFor(String type, String fileName) {
+        String label;
+        if ("image".equals(type)) {
+            label = "[图片]";
+        } else if ("emoji".equals(type)) {
+            label = "[表情]";
+        } else {
+            label = "[语音]";
+        }
+        return fileName == null || fileName.isEmpty()
+                ? label
+                : label + " " + fileName;
+    }
+
+    private void handleFileRequest(JsonObject data, String reqId) {
+        String fileId = optString(data, "fileId", "").trim();
+        if (!AttachmentService.isValidFileId(fileId)) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "fileId 无效", reqId));
             return;
         }
 
         try {
-            Message message = messageService.createAndStore(
-                    member, clientTag, content);
-            Ack ack = new Ack(
-                    clientMsgId, message.msgUuid, message.seq, message.createdAt);
-            recentAcks.put(clientMsgId, ack);
-
-            sendAck(ack, reqId);
-            server.broadcastMessage(message, this);
-
-            String preview = content.length() > 40
-                    ? content.substring(0, 40) + "…"
-                    : content;
-            server.getEvents().onLog(member.nickname + ": " + preview);
-            server.onChatMessage(member, message);
+            AttachmentService.FileData file = attachmentService.load(fileId);
+            JsonObject response = new JsonObject();
+            response.addProperty("fileId", fileId);
+            if (file == null) {
+                response.addProperty("expired", true);
+                response.addProperty("data", "");
+            } else {
+                Attachment attachment = file.attachment;
+                response.addProperty("fileName",
+                        attachment.fileName == null ? "" : attachment.fileName);
+                response.addProperty("mime",
+                        attachment.mime == null ? "" : attachment.mime);
+                response.addProperty("size", attachment.size);
+                response.addProperty("expired", file.expired);
+                response.addProperty("data", file.expired
+                        ? ""
+                        : Base64.getEncoder().encodeToString(file.bytes));
+            }
+            send(Protocol.frame(Protocol.FILE_RES, reqId, response));
+        } catch (IllegalArgumentException e) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    e.getMessage(), reqId));
         } catch (Exception e) {
             send(Protocol.error(Protocol.ERR_DB,
-                    "消息保存失败，请稍后重试", reqId));
-            server.getEvents().onLog("消息落库失败：" + e.getMessage());
+                    "附件读取失败，请稍后重试", reqId));
+            server.getEvents().onLog("附件读取失败：" + e.getMessage());
         }
     }
 
@@ -596,6 +709,16 @@ public class ClientHandler implements Runnable {
         data.addProperty("msgId", ack.msgId);
         data.addProperty("seq", ack.seq);
         data.addProperty("ts", ack.ts);
+        data.addProperty("type", ack.type);
+        if (ack.fileId != null && !ack.fileId.isEmpty()) {
+            data.addProperty("fileId", ack.fileId);
+            data.addProperty("fileName",
+                    ack.fileName == null ? "" : ack.fileName);
+            data.addProperty("fileMime",
+                    ack.fileMime == null ? "" : ack.fileMime);
+            data.addProperty("fileSize", ack.fileSize);
+            data.addProperty("fileExpired", ack.fileExpired);
+        }
         send(Protocol.frame(Protocol.MESSAGE_ACK, reqId, data));
     }
 
@@ -613,12 +736,24 @@ public class ClientHandler implements Runnable {
         final String msgId;
         final long seq;
         final long ts;
+        final String type;
+        final String fileId;
+        final String fileName;
+        final String fileMime;
+        final long fileSize;
+        final boolean fileExpired;
 
-        Ack(String clientMsgId, String msgId, long seq, long ts) {
+        Ack(String clientMsgId, Message message) {
             this.clientMsgId = clientMsgId;
-            this.msgId = msgId;
-            this.seq = seq;
-            this.ts = ts;
+            this.msgId = message.msgUuid;
+            this.seq = message.seq;
+            this.ts = message.createdAt;
+            this.type = message.type;
+            this.fileId = message.fileId;
+            this.fileName = message.fileName;
+            this.fileMime = message.fileMime;
+            this.fileSize = message.fileSize;
+            this.fileExpired = message.fileExpired;
         }
     }
 
