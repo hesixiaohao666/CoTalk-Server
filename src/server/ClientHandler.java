@@ -590,7 +590,7 @@ public class ClientHandler implements Runnable {
             Message message = messageService.createAndStore(
                     member, clientTag, content, type, saved);
             stored = true;
-            acceptMessage(clientMsgId, message, reqId, previewFor(type, decoded.fileName));
+            acceptMessage(clientMsgId, message, reqId, previewFor(type, saved.fileName));
             attachmentService.requestCleanup();
         } catch (Exception e) {
             if (saved != null && !stored) {

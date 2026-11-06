@@ -82,6 +82,43 @@ public class AttachmentStore {
     }
 
     /**
+     * 同一秒时间戳前缀下已使用的最大序号，用于服务端统一命名。
+     */
+    public int maxFileNameSequence(String prefix) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT file_name FROM attachment WHERE file_name LIKE ?")) {
+                statement.setString(1, prefix + "%");
+                try (ResultSet result = statement.executeQuery()) {
+                    int max = 0;
+                    while (result.next()) {
+                        String name = result.getString(1);
+                        if (name == null) {
+                            continue;
+                        }
+                        int index = prefix.length();
+                        int start = index;
+                        while (index < name.length()
+                                && Character.isDigit(name.charAt(index))) {
+                            index++;
+                        }
+                        if (index > start) {
+                            try {
+                                max = Math.max(max,
+                                        Integer.parseInt(name.substring(start, index)));
+                            } catch (NumberFormatException ignored) {
+                                // 非标准历史文件名，忽略。
+                            }
+                        }
+                    }
+                    return max;
+                }
+            }
+        }
+    }
+
+    /**
      * 超过保留期限且尚未清理的附件，按创建时间从旧到新。
      */
     public List<Attachment> cleanupCandidates(long cutoff, int limit)

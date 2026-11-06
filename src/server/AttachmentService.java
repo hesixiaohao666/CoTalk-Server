@@ -8,7 +8,10 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -33,6 +36,10 @@ public class AttachmentService {
             Pattern.compile("f-[0-9a-f]{16}");
     private static final int MAX_FILE_NAME_LENGTH = 80;
     private static final int CLEANUP_BATCH_SIZE = 200;
+    private static final String FILE_NAME_TIME_PATTERN = "yyyyMMddHHmmss";
+
+    private String lastFileNamePrefix = "";
+    private int lastFileNameSequence;
 
     public static final class DecodedAttachment {
         public final String mime;
@@ -175,9 +182,16 @@ public class AttachmentService {
         return new DecodedAttachment(mime, safeFileName(fileName, mime), bytes);
     }
 
-    public Attachment save(byte[] bytes, String mime, String fileName)
+    /**
+     * 附件文件名由服务端统一生成，客户端传入的 fileName 只作兼容参数。
+     */
+    public synchronized Attachment save(byte[] bytes,
+                                        String mime,
+                                        String fileName)
             throws IOException {
         Files.createDirectories(directory);
+        long createdAt = System.currentTimeMillis();
+        String canonicalName = nextFileName(mime, createdAt);
         String fileId = "f-" + UUID.randomUUID().toString()
                 .replace("-", "")
                 .substring(0, 16);
@@ -201,12 +215,31 @@ public class AttachmentService {
 
         Attachment attachment = new Attachment();
         attachment.fileId = fileId;
-        attachment.fileName = fileName;
+        attachment.fileName = canonicalName;
         attachment.mime = mime;
         attachment.size = bytes.length;
-        attachment.createdAt = System.currentTimeMillis();
+        attachment.createdAt = createdAt;
         attachment.expired = false;
         return attachment;
+    }
+
+    private String nextFileName(String mime, long createdAt) throws IOException {
+        String prefix = new SimpleDateFormat(
+                FILE_NAME_TIME_PATTERN, Locale.ROOT).format(new Date(createdAt));
+        int sequence;
+        if (prefix.equals(lastFileNamePrefix)) {
+            sequence = lastFileNameSequence + 1;
+        } else {
+            try {
+                sequence = attachmentStore.maxFileNameSequence(prefix) + 1;
+            } catch (SQLException e) {
+                throw new IOException("附件文件名生成失败", e);
+            }
+        }
+        lastFileNamePrefix = prefix;
+        lastFileNameSequence = sequence;
+        return prefix + String.format(Locale.ROOT, "%03d", sequence)
+                + extensionFor(mime);
     }
 
     /**

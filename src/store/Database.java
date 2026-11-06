@@ -102,6 +102,8 @@ public class Database implements AutoCloseable {
                     + "ON attachment(message_uuid)");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_attachment_expired "
                     + "ON attachment(expired, created_at)");
+            statement.execute("CREATE INDEX IF NOT EXISTS idx_attachment_name "
+                    + "ON attachment(file_name)");
 
             // v1 -> v2：旧库补齐消息附件字段；全新库的建表语句已包含这些列。
             addColumnIfMissing(statement, "message", "file_id", "TEXT");
