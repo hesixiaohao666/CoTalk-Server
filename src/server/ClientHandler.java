@@ -223,6 +223,9 @@ public class ClientHandler implements Runnable {
             case Protocol.RECALL_REQ:
                 handleRecallRequest(data, reqId);
                 return true;
+            case Protocol.POKE_REQ:
+                handlePoke(data, reqId);
+                return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
                         "不支持的请求类型", reqId));
@@ -334,6 +337,10 @@ public class ClientHandler implements Runnable {
                     "昵称需为 1–16 个字符", reqId));
             return;
         }
+        String signature = optString(data, "signature", "").trim();
+        if (signature.length() > 40) {
+            signature = signature.substring(0, 40);
+        }
 
         String avatar = optString(data, "avatar", "");
         AvatarService.AvatarData avatarData = null;
@@ -359,12 +366,24 @@ public class ClientHandler implements Runnable {
         }
         server.getEvents().onLog("客户端连接，IP：" + ip);
 
-        member = roomService.join(nickname, ip);
+        Member pending = server.claimPendingMember(tag);
+        boolean rejoined = pending != null;
+        if (rejoined) {
+            member = pending;
+            member.nickname = nickname;
+            member.signature = signature;
+        } else {
+            member = roomService.join(nickname, signature, ip);
+        }
         if (avatarData != null) {
             try {
                 member.avatarVersion = avatarService.save(member.id, avatarData);
             } catch (Exception e) {
-                roomService.leave(member.id);
+                if (rejoined) {
+                    server.schedulePendingDisconnect(member, tag);
+                } else {
+                    roomService.leave(member.id);
+                }
                 member = null;
                 send(Protocol.error(Protocol.ERR_INTERNAL,
                         "头像保存失败", reqId));
@@ -381,7 +400,11 @@ public class ClientHandler implements Runnable {
         // 否则其他客户端同时广播 member_list 时，可能抢在 join_ok 前到达新客户端。
         sendJoinOk(reqId);
         if (closed.get()) {
-            roomService.leave(member.id);
+            if (rejoined) {
+                server.schedulePendingDisconnect(member, tag);
+            } else {
+                roomService.leave(member.id);
+            }
             return;
         }
         joined = true;
@@ -394,12 +417,17 @@ public class ClientHandler implements Runnable {
         }
 
         server.broadcastMemberList();
-        server.broadcastSystemMessage(nickname + " 加入了群聊");
+        if (!rejoined) {
+            server.broadcastSystemMessage(nickname + " 加入了群聊");
+        }
         server.notifyMembersChanged();
 
-        server.getEvents().onLog(nickname + " 加入，临时 ID " + member.id
+        server.getEvents().onLog((rejoined ? nickname + " 重新加入" : nickname + " 加入")
+                + "，临时 ID " + member.id
                 + "，客户端 IP " + ip);
-        server.onMemberJoined(member);
+        if (!rejoined) {
+            server.onMemberJoined(member);
+        }
     }
 
     private void sendJoinOk(String reqId) {
@@ -454,6 +482,12 @@ public class ClientHandler implements Runnable {
                 return;
             }
             member.nickname = nickname;
+        }
+        if (data.has("signature")) {
+            String signature = optString(data, "signature", "").trim();
+            member.signature = signature.length() > 40
+                    ? signature.substring(0, 40)
+                    : signature;
         }
 
         String avatar = optString(data, "avatar", "");
@@ -631,6 +665,26 @@ public class ClientHandler implements Runnable {
         return fileName == null || fileName.isEmpty()
                 ? label
                 : label + " " + fileName;
+    }
+
+    private void handlePoke(JsonObject data, String reqId) {
+        String targetId = optString(data, "targetId", "").trim();
+        if (targetId.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "缺少 targetId", reqId));
+            return;
+        }
+        Member target = roomService.find(targetId);
+        if (target == null) {
+            send(Protocol.error(Protocol.ERR_POKE_TARGET,
+                    "目标用户不在线", reqId));
+            return;
+        }
+        String signature = target.signature == null
+                ? "" : target.signature.trim();
+        String notice = member.nickname + " 拍了拍 " + target.nickname
+                + (signature.isEmpty() ? "" : "，" + signature);
+        server.broadcastSystemMessage(notice);
     }
 
     private void handleRecallRequest(JsonObject data, String reqId) {
@@ -833,7 +887,6 @@ public class ClientHandler implements Runnable {
         }
 
         if (wasJoined && member != null) {
-            roomService.leave(member.id);
             try {
                 connectionLogStore.closeConnection(
                         member.id, System.currentTimeMillis());
@@ -841,10 +894,14 @@ public class ClientHandler implements Runnable {
                 server.getEvents().onLog("更新连接日志失败：" + e.getMessage());
             }
             server.unregister(this);
-            server.broadcastMemberList();
-            server.broadcastSystemMessage(member.nickname + " 离开了群聊");
-            server.notifyMembersChanged();
-            server.getEvents().onLog(member.nickname + " 离开，临时 ID " + member.id);
+            if (server.isMemberActive(member.id)) {
+                server.getEvents().onLog(member.nickname
+                        + " 旧连接断开，但同一成员已有新连接，忽略延迟离线");
+            } else {
+                server.schedulePendingDisconnect(member, clientTag);
+                server.getEvents().onLog(member.nickname
+                        + " 连接断开，5 秒内保留在线状态，临时 ID " + member.id);
+            }
         } else {
             server.unregister(this);
         }

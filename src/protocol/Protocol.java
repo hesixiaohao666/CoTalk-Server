@@ -21,6 +21,7 @@ public final class Protocol {
     public static final String AVATAR_REQ = "avatar_req";
     public static final String FILE_REQ = "file_req";
     public static final String RECALL_REQ = "recall_req";
+    public static final String POKE_REQ = "poke_req";
     public static final String PING = "ping";
     public static final String LEAVE = "leave";
 

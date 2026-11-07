@@ -17,15 +17,32 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TCP 服务端：连接管理、成员广播、消息广播与 AI 钩子。
  */
 public class ChatServer implements AiReplySink {
+
+    private static final long RECONNECT_GRACE_MS = 5000L;
+
+    private static final class PendingDisconnect {
+        final Member member;
+        final String clientTag;
+        ScheduledFuture<?> task;
+
+        PendingDisconnect(Member member, String clientTag) {
+            this.member = member;
+            this.clientTag = clientTag;
+        }
+    }
 
     private final ServerConfig config;
     private final RoomService roomService;
@@ -38,6 +55,15 @@ public class ChatServer implements AiReplySink {
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
     private final ExecutorService clientPool = Executors.newCachedThreadPool();
+    private final Map<String, PendingDisconnect> pendingDisconnects =
+            new ConcurrentHashMap<>();
+    private final ScheduledExecutorService pendingScheduler =
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(
+                        runnable, "cotalk-reconnect-grace");
+                thread.setDaemon(true);
+                return thread;
+            });
 
     private volatile boolean running;
     private ServerSocket serverSocket;
@@ -128,6 +154,8 @@ public class ChatServer implements AiReplySink {
             handler.close();
         }
         handlers.clear();
+        pendingScheduler.shutdownNow();
+        pendingDisconnects.clear();
         clientPool.shutdownNow();
         if (aiResponder != null) {
             aiResponder.shutdown();
@@ -136,6 +164,81 @@ public class ChatServer implements AiReplySink {
         events.onMembersChanged(Collections.emptyList());
         events.onStatusChanged("已停止");
         events.onLog("服务已停止");
+    }
+
+    /**
+     * 断开后 5 秒内保留成员；同 clientTag 重连可复用原成员。
+     */
+    public void schedulePendingDisconnect(Member member, String clientTag) {
+        if (member == null) {
+            return;
+        }
+        String key = pendingKey(clientTag, member);
+        PendingDisconnect pending = new PendingDisconnect(member, clientTag);
+        synchronized (pendingDisconnects) {
+            PendingDisconnect previous = pendingDisconnects.put(key, pending);
+            if (previous != null && previous.task != null) {
+                previous.task.cancel(false);
+            }
+            try {
+                pending.task = pendingScheduler.schedule(
+                        () -> expirePending(key, pending),
+                        RECONNECT_GRACE_MS, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                pendingDisconnects.remove(key, pending);
+            }
+        }
+    }
+
+    public boolean isMemberActive(String memberId) {
+        if (memberId == null) {
+            return false;
+        }
+        for (ClientHandler handler : handlers) {
+            Member member = handler.getMember();
+            if (member != null && memberId.equals(member.id)
+                    && handler.isJoined()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Member claimPendingMember(String clientTag) {
+        if (clientTag == null || clientTag.isEmpty()) {
+            return null;
+        }
+        PendingDisconnect pending =
+                pendingDisconnects.remove("tag:" + clientTag);
+        if (pending == null) {
+            return null;
+        }
+        if (pending.task != null) {
+            pending.task.cancel(false);
+        }
+        return roomService.isOnline(pending.member.id)
+                ? pending.member : null;
+    }
+
+    private void expirePending(String key, PendingDisconnect pending) {
+        if (!pendingDisconnects.remove(key, pending)) {
+            return;
+        }
+        if (!roomService.isOnline(pending.member.id)) {
+            return;
+        }
+        roomService.leave(pending.member.id);
+        broadcastMemberList();
+        broadcastSystemMessage(pending.member.nickname + " 离开了群聊");
+        notifyMembersChanged();
+        events.onLog(pending.member.nickname + " 离开，临时 ID "
+                + pending.member.id);
+    }
+
+    private static String pendingKey(String clientTag, Member member) {
+        return clientTag == null || clientTag.isEmpty()
+                ? "member:" + member.id
+                : "tag:" + clientTag;
     }
 
     public boolean isRunning() {
@@ -333,6 +436,8 @@ public class ChatServer implements AiReplySink {
         JsonObject json = new JsonObject();
         json.addProperty("id", member.id);
         json.addProperty("nickname", member.nickname);
+        json.addProperty("signature",
+                member.signature == null ? "" : member.signature);
         json.addProperty("avatarVersion", member.avatarVersion);
         json.addProperty("ai", member.ai);
         return json;

@@ -37,7 +37,7 @@ public class RoomService {
         return room;
     }
 
-    public Member join(String nickname, String ip) {
+    public Member join(String nickname, String signature, String ip) {
         String id;
         do {
             id = "u-" + UUID.randomUUID().toString()
@@ -48,6 +48,7 @@ public class RoomService {
         Member member = new Member(
                 id,
                 nickname,
+                signature,
                 0,
                 false,
                 ip,
@@ -55,6 +56,22 @@ public class RoomService {
         );
         online.put(id, member);
         return member;
+    }
+
+    public Member find(String userId) {
+        if (userId == null) {
+            return null;
+        }
+        Member member = online.get(userId);
+        if (member != null) {
+            return member;
+        }
+        Member ai = aiMember;
+        return ai != null && ai.id.equals(userId) ? ai : null;
+    }
+
+    public boolean isOnline(String userId) {
+        return userId != null && online.containsKey(userId);
     }
 
     public void leave(String userId) {

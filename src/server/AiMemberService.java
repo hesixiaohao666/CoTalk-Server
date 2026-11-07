@@ -36,6 +36,7 @@ public final class AiMemberService {
         return new Member(
                 AiResponder.AI_USER_ID,
                 config.aiName,
+                "",
                 avatarVersion,
                 true,
                 "server-ai",
