@@ -256,6 +256,9 @@ public class AttachmentService {
         if (attachment.expired) {
             return new FileData(attachment, null, true);
         }
+        if (attachmentStore.isMessageRecalled(attachment.messageUuid)) {
+            return new FileData(attachment, null, true);
+        }
         // 超过 7 天不再向客户端发送；文件可继续留在磁盘，等待 2GB 超限清理。
         if (attachment.createdAt < StoragePolicy.syncCutoff(
                 System.currentTimeMillis())) {

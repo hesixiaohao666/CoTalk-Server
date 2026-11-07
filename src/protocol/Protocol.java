@@ -20,6 +20,7 @@ public final class Protocol {
     public static final String PROFILE_UPDATE = "profile_update";
     public static final String AVATAR_REQ = "avatar_req";
     public static final String FILE_REQ = "file_req";
+    public static final String RECALL_REQ = "recall_req";
     public static final String PING = "ping";
     public static final String LEAVE = "leave";
 
@@ -30,6 +31,7 @@ public final class Protocol {
     public static final String MEMBER_LIST = "member_list";
     public static final String AVATAR_RES = "avatar_res";
     public static final String FILE_RES = "file_res";
+    public static final String MESSAGE_RECALL = "message_recall";
     public static final String SYSTEM = "system";
     public static final String ERROR = "error";
     public static final String PONG = "pong";
@@ -44,6 +46,11 @@ public final class Protocol {
     public static final int ERR_VERSION = 2008;
     public static final int ERR_UNSUPPORTED = 2009;
     public static final int ERR_FULL = 2010;
+    public static final int ERR_RECALL_NOT_FOUND = 2011;
+    public static final int ERR_RECALL_FORBIDDEN = 2012;
+    public static final int ERR_RECALL_EXPIRED = 2013;
+    public static final int ERR_RECALL_STATE = 2014;
+    public static final int ERR_POKE_TARGET = 2015;
 
     public static final int ERR_AUTH_FAILED = 3001;
     public static final int ERR_CLIENT_VERSION = 3002;

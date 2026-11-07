@@ -220,6 +220,9 @@ public class ClientHandler implements Runnable {
             case Protocol.FILE_REQ:
                 handleFileRequest(data, reqId);
                 return true;
+            case Protocol.RECALL_REQ:
+                handleRecallRequest(data, reqId);
+                return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
                         "不支持的请求类型", reqId));
@@ -546,7 +549,7 @@ public class ClientHandler implements Runnable {
             try {
                 Message message = messageService.createAndStore(
                         member, clientTag, content);
-                acceptMessage(clientMsgId, message, reqId, content);
+                acceptMessage(clientMsgId, message, reqId, content, message.seq);
                 server.onChatMessage(member, message);
             } catch (Exception e) {
                 send(Protocol.error(Protocol.ERR_DB,
@@ -590,7 +593,8 @@ public class ClientHandler implements Runnable {
             Message message = messageService.createAndStore(
                     member, clientTag, content, type, saved);
             stored = true;
-            acceptMessage(clientMsgId, message, reqId, previewFor(type, saved.fileName));
+            acceptMessage(clientMsgId, message, reqId,
+                    previewFor(type, saved.fileName), message.seq);
             attachmentService.requestCleanup();
         } catch (Exception e) {
             if (saved != null && !stored) {
@@ -605,12 +609,14 @@ public class ClientHandler implements Runnable {
     private void acceptMessage(String clientMsgId,
                                Message message,
                                String reqId,
-                               String logPreview) {
+                               String logPreview,
+                               long seq) {
         Ack ack = new Ack(clientMsgId, message);
         recentAcks.put(clientMsgId, ack);
         sendAck(ack, reqId);
         server.broadcastMessage(message, this);
-        server.getEvents().onLog(member.nickname + ": " + logPreview);
+        server.getEvents().onLog("[#" + seq + "] "
+                + member.nickname + ": " + logPreview);
     }
 
     private static String previewFor(String type, String fileName) {
@@ -625,6 +631,21 @@ public class ClientHandler implements Runnable {
         return fileName == null || fileName.isEmpty()
                 ? label
                 : label + " " + fileName;
+    }
+
+    private void handleRecallRequest(JsonObject data, String reqId) {
+        String msgId = optString(data, "msgId", "").trim();
+        if (msgId.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "缺少 msgId", reqId));
+            return;
+        }
+        MessageService.RecallResult result =
+                server.recallByMsgId(msgId, clientTag);
+        if (!result.success) {
+            send(Protocol.error(result.errorCode,
+                    result.errorMessage, reqId));
+        }
     }
 
     private void handleFileRequest(JsonObject data, String reqId) {

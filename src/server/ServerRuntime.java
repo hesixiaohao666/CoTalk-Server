@@ -3,6 +3,7 @@ package server;
 import ai.AiResponderFactory;
 import model.Member;
 import model.Room;
+import protocol.Protocol;
 import store.AttachmentStore;
 import store.AvatarStore;
 import store.ConnectionLogStore;
@@ -132,6 +133,14 @@ public final class ServerRuntime {
             chatServer.broadcastSystemMessage(text);
             chatServer.broadcastSystem(text);
         }
+    }
+
+    public MessageService.RecallResult forceRecall(long seq) {
+        if (chatServer == null || !chatServer.isRunning()) {
+            return MessageService.RecallResult.failure(
+                    Protocol.ERR_INTERNAL, "服务未启动");
+        }
+        return chatServer.forceRecallBySeq(seq);
     }
 
     public String getAiStatus() {

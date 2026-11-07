@@ -153,7 +153,7 @@ public final class HeadlessConsole {
     private static void handleCommand(ServerRuntime runtime, String command) {
         if ("help".equalsIgnoreCase(command)) {
             log("命令：help | status | members | broadcast <text> | "
-                    + "ai status | config path | stop");
+                    + "recall <seq> | ai status | config path | stop");
             return;
         }
         if ("status".equalsIgnoreCase(command)) {
@@ -184,6 +184,23 @@ public final class HeadlessConsole {
             } else {
                 runtime.broadcast(text);
                 log("广播：" + text);
+            }
+            return;
+        }
+        if (command.startsWith("recall ")) {
+            String value = command.substring("recall ".length()).trim();
+            long seq;
+            try {
+                seq = Long.parseLong(value);
+            } catch (NumberFormatException e) {
+                log("用法：recall <seq>");
+                return;
+            }
+            MessageService.RecallResult result = runtime.forceRecall(seq);
+            if (result.success) {
+                log("已强制撤回 #" + seq + "：" + result.notice);
+            } else {
+                log("撤回失败：" + result.errorMessage);
             }
             return;
         }

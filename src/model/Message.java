@@ -18,5 +18,6 @@ public class Message {
     public String fileMime;
     public long fileSize;
     public boolean fileExpired;
+    public boolean recalled;
     public long createdAt;
 }

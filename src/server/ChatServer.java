@@ -212,11 +212,51 @@ public class ChatServer implements AiReplySink {
         }
         try {
             Message message = messageService.appendSystem(content);
+            events.onLog("[#" + message.seq + "] 系统: " + content);
             broadcastMessage(message, null);
         } catch (Exception e) {
             events.onLog("写入系统消息失败：" + e.getMessage());
             broadcastSystem(content);
         }
+    }
+
+    public MessageService.RecallResult recallByMsgId(String msgId,
+                                                     String clientTag) {
+        MessageService.RecallResult result =
+                messageService.recallByMsgId(msgId, clientTag);
+        if (result.success) {
+            broadcastRecall(result);
+        }
+        return result;
+    }
+
+    public MessageService.RecallResult forceRecallBySeq(long seq) {
+        MessageService.RecallResult result =
+                messageService.forceRecallBySeq(seq);
+        if (result.success) {
+            broadcastRecall(result);
+        }
+        return result;
+    }
+
+    private void broadcastRecall(MessageService.RecallResult result) {
+        if (!running || result.message == null) {
+            return;
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("msgId", result.message.msgUuid);
+        data.addProperty("seq", result.message.seq);
+        data.addProperty("notice", result.notice);
+        data.addProperty("ts", result.message.createdAt);
+        String line = JsonUtil.stringify(
+                Protocol.frame(Protocol.MESSAGE_RECALL, null, data));
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (handler.isJoined()) {
+                handler.sendLine(line);
+            }
+        }
+        events.onLog("[#" + result.message.seq + "] 撤回："
+                + result.notice);
     }
 
     public void onChatMessage(Member sender, Message message) {
@@ -246,7 +286,8 @@ public class ChatServer implements AiReplySink {
         }
         Message message = messageService.appendAiMessage(aiMember, content);
         broadcastMessage(message, null);
-        events.onLog(aiMember.nickname + ": " + content);
+        events.onLog("[#" + message.seq + "] "
+                + aiMember.nickname + ": " + content);
     }
 
     @Override

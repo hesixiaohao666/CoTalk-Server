@@ -20,7 +20,7 @@ public class MessageStore {
             "msg_uuid, seq, sender_id, sender_name, sender_tag, "
                     + "sender_avatar_version, content, msg_type, "
                     + "file_id, file_name, file_mime, file_size, file_expired, "
-                    + "created_at";
+                    + "recalled, created_at";
 
     private final Database database;
 
@@ -109,18 +109,58 @@ public class MessageStore {
         }
     }
 
+    public Message findBySeq(long seq) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT " + COLUMNS + " FROM message WHERE seq = ?")) {
+                statement.setLong(1, seq);
+                List<Message> messages = readList(statement.executeQuery());
+                return messages.isEmpty() ? null : messages.get(0);
+            }
+        }
+    }
+
+    public Message findByMsgUuid(String msgUuid) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT " + COLUMNS + " FROM message WHERE msg_uuid = ?")) {
+                statement.setString(1, msgUuid);
+                List<Message> messages = readList(statement.executeQuery());
+                return messages.isEmpty() ? null : messages.get(0);
+            }
+        }
+    }
+
+    /**
+     * 只设置撤回标记，原消息内容和附件元数据保持不动。
+     */
+    public boolean markRecalled(String msgUuid) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE message SET recalled = 1 "
+                            + "WHERE msg_uuid = ? AND recalled = 0")) {
+                statement.setString(1, msgUuid);
+                return statement.executeUpdate() > 0;
+            }
+        }
+    }
+
     public List<Message> loadRecent(int limit, long cutoff) throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT " + COLUMNS + " FROM message "
-                            + "WHERE created_at >= ? AND file_expired = 0 "
+                            + "WHERE created_at >= ? "
+                            + "AND (file_expired = 0 OR recalled = 1) "
                             + "ORDER BY seq DESC LIMIT ?")) {
                 statement.setLong(1, cutoff);
                 statement.setInt(2, limit);
                 List<Message> messages = readList(statement.executeQuery());
                 Collections.reverse(messages);
-                return messages;
+                return maskRecalled(messages);
             }
         }
     }
@@ -132,14 +172,14 @@ public class MessageStore {
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT " + COLUMNS + " FROM message "
                             + "WHERE seq < ? AND created_at >= ? "
-                            + "AND file_expired = 0 "
+                            + "AND (file_expired = 0 OR recalled = 1) "
                             + "ORDER BY seq DESC LIMIT ?")) {
                 statement.setLong(1, beforeSeq);
                 statement.setLong(2, cutoff);
                 statement.setInt(3, limit);
                 List<Message> messages = readList(statement.executeQuery());
                 Collections.reverse(messages);
-                return messages;
+                return maskRecalled(messages);
             }
         }
     }
@@ -151,14 +191,44 @@ public class MessageStore {
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT " + COLUMNS + " FROM message "
                             + "WHERE seq > ? AND created_at >= ? "
-                            + "AND file_expired = 0 "
+                            + "AND (file_expired = 0 OR recalled = 1) "
                             + "ORDER BY seq ASC LIMIT ?")) {
                 statement.setLong(1, afterSeq);
                 statement.setLong(2, cutoff);
                 statement.setInt(3, limit);
-                return readList(statement.executeQuery());
+                return maskRecalled(readList(statement.executeQuery()));
             }
         }
+    }
+
+    private List<Message> maskRecalled(List<Message> messages) {
+        List<Message> result = new ArrayList<>(messages.size());
+        for (Message message : messages) {
+            if (!message.recalled) {
+                result.add(message);
+                continue;
+            }
+            Message masked = new Message();
+            masked.msgUuid = message.msgUuid;
+            masked.seq = message.seq;
+            masked.senderId = "system";
+            masked.senderName = "系统";
+            masked.senderTag = "";
+            masked.senderAvatarVersion = 0;
+            masked.content = recalledNotice(message.senderName);
+            masked.type = "system";
+            masked.createdAt = message.createdAt;
+            masked.recalled = true;
+            result.add(masked);
+        }
+        return result;
+    }
+
+    private static String recalledNotice(String senderName) {
+        String name = senderName == null || senderName.trim().isEmpty()
+                ? "用户"
+                : senderName.trim();
+        return name + " 撤回了一条消息";
     }
 
     private List<Message> readList(ResultSet result) throws SQLException {
@@ -178,6 +248,7 @@ public class MessageStore {
             message.fileMime = result.getString("file_mime");
             message.fileSize = result.getLong("file_size");
             message.fileExpired = result.getInt("file_expired") != 0;
+            message.recalled = result.getInt("recalled") != 0;
             message.createdAt = result.getLong("created_at");
             messages.add(message);
         }

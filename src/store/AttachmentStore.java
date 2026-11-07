@@ -37,6 +37,25 @@ public class AttachmentStore {
     }
 
     /**
+     * 撤回不删除附件文件，但禁止客户端继续下载。
+     */
+    public boolean isMessageRecalled(String messageUuid) throws SQLException {
+        if (messageUuid == null || messageUuid.isEmpty()) {
+            return false;
+        }
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT recalled FROM message WHERE msg_uuid = ?")) {
+                statement.setString(1, messageUuid);
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next() && result.getInt(1) != 0;
+                }
+            }
+        }
+    }
+
+    /**
      * 文件过期或文件缺失时，同时标记附件和对应消息。
      */
     public void markExpired(String fileId, String messageUuid) throws SQLException {

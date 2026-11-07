@@ -3,6 +3,7 @@ package server;
 import model.Attachment;
 import model.Member;
 import model.Message;
+import protocol.Protocol;
 import store.MessageStore;
 
 import java.sql.SQLException;
@@ -13,6 +14,42 @@ import java.util.UUID;
  * 消息序号、落库、历史查询。
  */
 public class MessageService {
+
+    public static final long RECALL_WINDOW_MS = 2 * 60 * 1000L;
+
+    public static final class RecallResult {
+        public final boolean success;
+        public final int errorCode;
+        public final String errorMessage;
+        public final Message message;
+        public final String notice;
+        public final String fileId;
+
+        private RecallResult(boolean success,
+                             int errorCode,
+                             String errorMessage,
+                             Message message,
+                             String notice,
+                             String fileId) {
+            this.success = success;
+            this.errorCode = errorCode;
+            this.errorMessage = errorMessage;
+            this.message = message;
+            this.notice = notice;
+            this.fileId = fileId;
+        }
+
+        static RecallResult success(Message message,
+                                    String notice,
+                                    String fileId) {
+            return new RecallResult(true, 0, "", message, notice, fileId);
+        }
+
+        public static RecallResult failure(int errorCode, String errorMessage) {
+            return new RecallResult(false, errorCode, errorMessage,
+                    null, null, null);
+        }
+    }
 
     private final MessageStore messageStore;
     private long nextSeq;
@@ -95,6 +132,66 @@ public class MessageService {
 
     public synchronized long lastSeq() {
         return Math.max(0L, nextSeq - 1);
+    }
+
+    public synchronized RecallResult recallByMsgId(String msgId,
+                                                   String requesterTag) {
+        try {
+            Message message = messageStore.findByMsgUuid(msgId);
+            return recall(message, requesterTag, false);
+        } catch (SQLException e) {
+            return RecallResult.failure(Protocol.ERR_DB,
+                    "读取消息失败：" + e.getMessage());
+        }
+    }
+
+    public synchronized RecallResult forceRecallBySeq(long seq) {
+        try {
+            Message message = messageStore.findBySeq(seq);
+            return recall(message, null, true);
+        } catch (SQLException e) {
+            return RecallResult.failure(Protocol.ERR_DB,
+                    "读取消息失败：" + e.getMessage());
+        }
+    }
+
+    private RecallResult recall(Message message,
+                                String requesterTag,
+                                boolean force) throws SQLException {
+        if (message == null) {
+            return RecallResult.failure(Protocol.ERR_RECALL_NOT_FOUND,
+                    "消息不存在");
+        }
+        if (message.recalled || "system".equals(message.type)) {
+            return RecallResult.failure(Protocol.ERR_RECALL_STATE,
+                    "消息不可撤回");
+        }
+        if (!force) {
+            if (requesterTag == null || requesterTag.isEmpty()
+                    || !requesterTag.equals(message.senderTag)) {
+                return RecallResult.failure(Protocol.ERR_RECALL_FORBIDDEN,
+                        "只能撤回自己发送的消息");
+            }
+            long elapsed = System.currentTimeMillis() - message.createdAt;
+            if (elapsed > RECALL_WINDOW_MS) {
+                return RecallResult.failure(Protocol.ERR_RECALL_EXPIRED,
+                        "消息已超过 2 分钟，无法撤回");
+            }
+        }
+        if (!messageStore.markRecalled(message.msgUuid)) {
+            return RecallResult.failure(Protocol.ERR_RECALL_STATE,
+                    "消息不可撤回");
+        }
+        message.recalled = true;
+        String notice = recalledNotice(message.senderName);
+        return RecallResult.success(message, notice, message.fileId);
+    }
+
+    private static String recalledNotice(String senderName) {
+        String name = senderName == null || senderName.trim().isEmpty()
+                ? "用户"
+                : senderName.trim();
+        return name + " 撤回了一条消息";
     }
 
     public List<Message> recent(int limit) throws SQLException {

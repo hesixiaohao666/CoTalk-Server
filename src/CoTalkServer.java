@@ -58,10 +58,12 @@ public class CoTalkServer extends JFrame {
     private JPanel memberListPanel;
     private final JTextArea logArea = new JTextArea();
     private final JTextField broadcastField = new JTextField(30);
+    private final JTextField recallSeqField = new JTextField(6);
     private final JButton startButton = new JButton("启动服务");
     private final JButton stopButton = new JButton("停止服务");
     private final JButton settingsButton = new JButton("设置");
     private final JButton broadcastButton = new JButton("广播");
+    private final JButton recallButton = new JButton("撤回消息");
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
 
@@ -334,20 +336,36 @@ public class CoTalkServer extends JFrame {
     }
 
     private JPanel buildFooter(Font baseFont, Font boldFont) {
-        JPanel footer = new JPanel(new BorderLayout(10, 0));
+        JPanel footer = new JPanel(new BorderLayout(10, 4));
         footer.setBorder(new EmptyBorder(10, 16, 14, 16));
         footer.setBackground(new Color(0xF5F5F5));
 
+        JPanel broadcastRow = new JPanel(new BorderLayout(10, 0));
+        broadcastRow.setOpaque(false);
         JLabel label = new JLabel("广播消息");
         label.setFont(boldFont);
         broadcastField.setFont(baseFont);
         broadcastField.setPreferredSize(new Dimension(200, 38));
         styleButton(broadcastButton, boldFont);
         broadcastButton.setPreferredSize(new Dimension(90, 38));
+        broadcastRow.add(label, BorderLayout.WEST);
+        broadcastRow.add(broadcastField, BorderLayout.CENTER);
+        broadcastRow.add(broadcastButton, BorderLayout.EAST);
 
-        footer.add(label, BorderLayout.WEST);
-        footer.add(broadcastField, BorderLayout.CENTER);
-        footer.add(broadcastButton, BorderLayout.EAST);
+        JPanel recallRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        recallRow.setOpaque(false);
+        JLabel recallLabel = new JLabel("撤回序号");
+        recallLabel.setFont(boldFont);
+        recallSeqField.setFont(baseFont);
+        recallSeqField.setPreferredSize(new Dimension(120, 34));
+        styleButton(recallButton, boldFont);
+        recallButton.setPreferredSize(new Dimension(110, 34));
+        recallRow.add(recallLabel);
+        recallRow.add(recallSeqField);
+        recallRow.add(recallButton);
+
+        footer.add(broadcastRow, BorderLayout.NORTH);
+        footer.add(recallRow, BorderLayout.SOUTH);
         return footer;
     }
 
@@ -393,6 +411,27 @@ public class CoTalkServer extends JFrame {
                 broadcastField.setText("");
             } else {
                 appendLog("服务未启动，无法广播。");
+            }
+        });
+        recallButton.addActionListener(e -> {
+            if (runtime == null || !runtime.isRunning()) {
+                appendLog("服务未启动，无法撤回。");
+                return;
+            }
+            String value = recallSeqField.getText().trim();
+            long seq;
+            try {
+                seq = Long.parseLong(value);
+            } catch (NumberFormatException ex) {
+                appendLog("撤回序号无效：" + value);
+                return;
+            }
+            MessageService.RecallResult result = runtime.forceRecall(seq);
+            if (result.success) {
+                appendLog("已强制撤回 #" + seq + "：" + result.notice);
+                recallSeqField.setText("");
+            } else {
+                appendLog("撤回失败：" + result.errorMessage);
             }
         });
     }
