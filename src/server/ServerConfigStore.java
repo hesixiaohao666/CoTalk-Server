@@ -22,7 +22,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    private static final String CONFIG_VERSION = "2";
+    private static final String CONFIG_VERSION = "3";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -57,6 +57,7 @@ public final class ServerConfigStore {
         boolean promptMigrated = false;
         boolean newKeysMissing = false;
         boolean configUpgraded = false;
+        boolean configVersionOutdated = false;
         if (!created) {
             Properties loaded = new Properties();
             try (BufferedReader reader = Files.newBufferedReader(
@@ -81,7 +82,12 @@ public final class ServerConfigStore {
             }
             newKeysMissing = !loaded.containsKey("ai.keywords")
                     || !loaded.containsKey("ai.keywordChance")
-                    || !loaded.containsKey("ai.randomChance");
+                    || !loaded.containsKey("ai.randomChance")
+                    || !loaded.containsKey("room.avatar")
+                    || !loaded.containsKey("ai.vision")
+                    || !loaded.containsKey("ai.systemMessages");
+            configVersionOutdated = !CONFIG_VERSION.equals(
+                    loaded.getProperty("config.version", "").trim());
 
             if (!loaded.containsKey("config.version")) {
                 // v0.2.1 早期默认值：随机 5%、3 条、每条 20 字。
@@ -115,7 +121,7 @@ public final class ServerConfigStore {
         validate(config);
 
         if (created || keyGenerated || promptMigrated
-                || newKeysMissing || configUpgraded) {
+                || newKeysMissing || configUpgraded || configVersionOutdated) {
             saveProperties(merged, path);
         }
         return new LoadResult(
@@ -203,6 +209,7 @@ public final class ServerConfigStore {
                 writer.write("\n");
                 write(writer, properties, "room.name");
                 write(writer, properties, "room.announcement");
+                write(writer, properties, "room.avatar");
                 write(writer, properties, "db.path");
                 write(writer, properties, "history.recent");
                 write(writer, properties, "history.maxFetch");
@@ -213,6 +220,8 @@ public final class ServerConfigStore {
                 write(writer, properties, "ai.model");
                 write(writer, properties, "ai.baseUrl");
                 write(writer, properties, "ai.thinking");
+                write(writer, properties, "ai.vision");
+                write(writer, properties, "ai.systemMessages");
                 write(writer, properties, "ai.prompt.custom");
                 write(writer, properties, "ai.mentions");
                 write(writer, properties, "ai.keywords");

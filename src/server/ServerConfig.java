@@ -18,6 +18,7 @@ public class ServerConfig {
 
     public final String roomName;
     public final String roomAnnouncement;
+    public final String roomAvatar;
     public final String dbPath;
     public final int historyRecent;
     public final int historyMaxFetch;
@@ -28,6 +29,8 @@ public class ServerConfig {
     public final String aiModel;
     public final String aiBaseUrl;
     public final boolean aiThinking;
+    public final boolean aiVision;
+    public final boolean aiSystemMessages;
     public final String aiPromptCustom;
     public final String aiMentions;
     public final String aiKeywords;
@@ -53,6 +56,7 @@ public class ServerConfig {
 
         roomName = value(properties, "room.name", "CoTalk 大厅");
         roomAnnouncement = value(properties, "room.announcement", "欢迎来到 CoTalk");
+        roomAvatar = value(properties, "room.avatar", "");
 
         dbPath = value(properties, "db.path", "data/cotalk.db");
         historyRecent = intValue(properties, "history.recent", 50);
@@ -65,6 +69,9 @@ public class ServerConfig {
         aiBaseUrl = value(properties, "ai.baseUrl",
                 "https://api.deepseek.com/chat/completions");
         aiThinking = Boolean.parseBoolean(value(properties, "ai.thinking", "false"));
+        aiVision = Boolean.parseBoolean(value(properties, "ai.vision", "true"));
+        aiSystemMessages = Boolean.parseBoolean(
+                value(properties, "ai.systemMessages", "true"));
         aiPromptCustom = customPrompt(properties);
         aiMentions = value(properties, "ai.mentions", "@大肥鱼,@AI");
         aiKeywords = value(properties, "ai.keywords", "大肥鱼,鱼,AI");
@@ -95,6 +102,7 @@ public class ServerConfig {
 
         properties.setProperty("room.name", "CoTalk 大厅");
         properties.setProperty("room.announcement", "欢迎来到 CoTalk");
+        properties.setProperty("room.avatar", "");
 
         properties.setProperty("db.path", "data/cotalk.db");
         properties.setProperty("history.recent", "50");
@@ -107,6 +115,8 @@ public class ServerConfig {
         properties.setProperty("ai.baseUrl",
                 "https://api.deepseek.com/chat/completions");
         properties.setProperty("ai.thinking", "false");
+        properties.setProperty("ai.vision", "true");
+        properties.setProperty("ai.systemMessages", "true");
         properties.setProperty("ai.prompt.custom", AiPrompts.DEFAULT_CUSTOM_PROMPT);
         properties.setProperty("ai.mentions", "@大肥鱼,@AI");
         properties.setProperty("ai.keywords", "大肥鱼,鱼,AI");
@@ -138,6 +148,7 @@ public class ServerConfig {
 
         properties.setProperty("room.name", roomName);
         properties.setProperty("room.announcement", roomAnnouncement);
+        properties.setProperty("room.avatar", roomAvatar);
         properties.setProperty("db.path", dbPath);
         properties.setProperty("history.recent", String.valueOf(historyRecent));
         properties.setProperty("history.maxFetch", String.valueOf(historyMaxFetch));
@@ -148,6 +159,8 @@ public class ServerConfig {
         properties.setProperty("ai.model", aiModel);
         properties.setProperty("ai.baseUrl", aiBaseUrl);
         properties.setProperty("ai.thinking", String.valueOf(aiThinking));
+        properties.setProperty("ai.vision", String.valueOf(aiVision));
+        properties.setProperty("ai.systemMessages", String.valueOf(aiSystemMessages));
         properties.setProperty("ai.prompt.custom", aiPromptCustom);
         properties.setProperty("ai.mentions", aiMentions);
         properties.setProperty("ai.keywords", aiKeywords);
