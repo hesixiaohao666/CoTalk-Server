@@ -11,8 +11,10 @@ import util.JsonUtil;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -27,10 +29,12 @@ import java.util.concurrent.TimeUnit;
 public class DeepSeekAiResponder implements AiResponder {
 
     private static final String MANDATORY_FALLBACK = "这个我暂时不能回答，换个话题吧。";
+    private static final int MAX_VISION_IMAGES = 2;
 
     private final ServerConfig config;
     private final DeepSeekClient client;
     private final AiReplySink sink;
+    private final AiImageResolver imageResolver;
     private final List<String> directMentions;
     private final List<String> keywords;
 
@@ -57,9 +61,17 @@ public class DeepSeekAiResponder implements AiResponder {
     public DeepSeekAiResponder(ServerConfig config,
                                DeepSeekClient client,
                                AiReplySink sink) {
+        this(config, client, sink, null);
+    }
+
+    public DeepSeekAiResponder(ServerConfig config,
+                               DeepSeekClient client,
+                               AiReplySink sink,
+                               AiImageResolver imageResolver) {
         this.config = config;
         this.client = client;
         this.sink = sink;
+        this.imageResolver = imageResolver;
         List<String> configuredMentions = splitMentions(config.aiMentions);
         this.directMentions = directMentions(configuredMentions);
         this.keywords = keywords(
@@ -164,13 +176,25 @@ public class DeepSeekAiResponder implements AiResponder {
         try {
             List<AiMessage> request = buildRequestMessages(
                     mergedMessages, context, mandatory);
-            String raw = client.chatCompletion(request);
+            List<AiMessage> activeRequest = request;
+            String raw;
+            try {
+                raw = client.chatCompletion(activeRequest);
+            } catch (Exception firstError) {
+                if (!containsImages(activeRequest)) {
+                    throw firstError;
+                }
+                sink.reportError("AI 识图请求失败，回退纯文本："
+                        + firstError.getMessage());
+                activeRequest = withoutImages(activeRequest);
+                raw = client.chatCompletion(activeRequest);
+            }
             ParsedReply reply;
             try {
                 reply = parseReply(raw);
             } catch (IllegalArgumentException firstError) {
                 sink.reportError("AI 响应无效，重试一次：" + firstError.getMessage());
-                raw = client.chatCompletion(buildRetryMessages(request));
+                raw = client.chatCompletion(buildRetryMessages(activeRequest));
                 reply = parseReply(raw);
             }
             if (reply == null || !reply.send || reply.messages.isEmpty()) {
@@ -212,6 +236,23 @@ public class DeepSeekAiResponder implements AiResponder {
         return retry;
     }
 
+    private static boolean containsImages(List<AiMessage> messages) {
+        for (AiMessage message : messages) {
+            if (message.images != null && !message.images.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<AiMessage> withoutImages(List<AiMessage> messages) {
+        List<AiMessage> result = new ArrayList<>(messages.size());
+        for (AiMessage message : messages) {
+            result.add(new AiMessage(message.role, message.content));
+        }
+        return result;
+    }
+
     private void sendMandatoryFallback() {
         sink.reportError("AI 未按强制回复要求输出，使用兜底回复");
         try {
@@ -233,6 +274,23 @@ public class DeepSeekAiResponder implements AiResponder {
         }
     }
 
+    private static Set<String> selectRecentImageIds(List<Message> context,
+                                                   int start) {
+        Set<String> result = new HashSet<>();
+        for (int i = context.size() - 1;
+             i >= start && result.size() < MAX_VISION_IMAGES; i--) {
+            Message message = context.get(i);
+            if (message == null || message.fileExpired
+                    || message.fileId == null || message.fileId.isEmpty()) {
+                continue;
+            }
+            if ("image".equals(message.type) || "emoji".equals(message.type)) {
+                result.add(message.fileId);
+            }
+        }
+        return result;
+    }
+
     private List<AiMessage> buildRequestMessages(List<String> mergedMessages,
                                                  List<Message> context,
                                                  boolean mandatory) {
@@ -247,13 +305,51 @@ public class DeepSeekAiResponder implements AiResponder {
 
         int max = Math.max(1, config.aiMaxContext);
         int start = Math.max(0, context.size() - max);
+        Set<String> selectedImageIds = selectRecentImageIds(context, start);
         for (int i = start; i < context.size(); i++) {
             Message message = context.get(i);
-            if (message == null || message.content == null
-                    || message.content.trim().isEmpty()) {
+            if (message == null || "system".equals(message.type)) {
                 continue;
             }
-            if ("system".equals(message.type)) {
+
+            if ("image".equals(message.type) || "emoji".equals(message.type)) {
+                String label = "image".equals(message.type)
+                        ? "[图片]" : "[表情]";
+                String sender = message.senderName == null
+                        ? "成员" : message.senderName;
+                StringBuilder text = new StringBuilder(sender)
+                        .append("：").append(label);
+                if (message.content != null
+                        && !message.content.trim().isEmpty()) {
+                    text.append(" ").append(message.content.trim());
+                }
+                List<AiImagePart> images = new ArrayList<>();
+                if (message.fileId != null
+                        && selectedImageIds.contains(message.fileId)
+                        && imageResolver != null) {
+                    try {
+                        AiImagePart image = imageResolver.resolve(message.fileId);
+                        if (image != null) {
+                            images.add(image);
+                        }
+                    } catch (Exception e) {
+                        sink.reportError("AI 读取图片失败："
+                                + e.getMessage());
+                    }
+                }
+                result.add(new AiMessage("user", text.toString(), images));
+                continue;
+            }
+
+            if ("voice".equals(message.type)) {
+                String sender = message.senderName == null
+                        ? "成员" : message.senderName;
+                result.add(new AiMessage("user", sender + "：[语音]"));
+                continue;
+            }
+
+            if (message.content == null
+                    || message.content.trim().isEmpty()) {
                 continue;
             }
             if (AI_USER_ID.equals(message.senderId)) {

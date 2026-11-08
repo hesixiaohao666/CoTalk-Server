@@ -1,5 +1,6 @@
 package server;
 
+import ai.AiImagePart;
 import ai.AiResponderFactory;
 import model.Member;
 import model.Room;
@@ -14,6 +15,7 @@ import store.RoomStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 
@@ -71,7 +73,18 @@ public final class ServerRuntime {
                 roomService.setAiMember(aiMember);
             }
             chatServer.setAiResponder(
-                    AiResponderFactory.create(config, chatServer));
+                    AiResponderFactory.create(config, chatServer, fileId -> {
+                        AttachmentService.FileData file =
+                                attachmentService.load(fileId);
+                        if (file == null || file.expired
+                                || file.bytes == null) {
+                            return null;
+                        }
+                        return new AiImagePart(
+                                file.attachment.mime,
+                                Base64.getEncoder()
+                                        .encodeToString(file.bytes));
+                    }));
             chatServer.start();
             attachmentService.startMaintenance();
         } catch (Exception e) {

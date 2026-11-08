@@ -47,7 +47,27 @@ public class DeepSeekHttpClient implements DeepSeekClient {
         for (AiMessage message : messages) {
             JsonObject item = new JsonObject();
             item.addProperty("role", message.role);
-            item.addProperty("content", message.content);
+            if (message.images == null || message.images.isEmpty()) {
+                item.addProperty("content", message.content);
+            } else {
+                JsonArray content = new JsonArray();
+                if (!message.content.isEmpty()) {
+                    JsonObject text = new JsonObject();
+                    text.addProperty("type", "text");
+                    text.addProperty("text", message.content);
+                    content.add(text);
+                }
+                for (AiImagePart image : message.images) {
+                    JsonObject imagePart = new JsonObject();
+                    imagePart.addProperty("type", "image_url");
+                    JsonObject url = new JsonObject();
+                    url.addProperty("url", "data:" + image.mime
+                            + ";base64," + image.base64Data);
+                    imagePart.add("image_url", url);
+                    content.add(imagePart);
+                }
+                item.add("content", content);
+            }
             array.add(item);
         }
         body.add("messages", array);

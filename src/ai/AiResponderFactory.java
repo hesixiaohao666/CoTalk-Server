@@ -22,11 +22,17 @@ public final class AiResponderFactory {
     }
 
     public static AiResponder create(ServerConfig config, AiReplySink sink) {
+        return create(config, sink, null);
+    }
+
+    public static AiResponder create(ServerConfig config,
+                                     AiReplySink sink,
+                                     AiImageResolver imageResolver) {
         if (!isConfigured(config) || sink == null) {
             return new NoopAiResponder();
         }
         return new DeepSeekAiResponder(
-                config, createDeepSeekClient(config), sink);
+                config, createDeepSeekClient(config), sink, imageResolver);
     }
 
     public static DeepSeekClient createDeepSeekClient(ServerConfig config) {
