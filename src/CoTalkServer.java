@@ -400,40 +400,46 @@ public class CoTalkServer extends JFrame {
         startButton.addActionListener(e -> startServer());
         stopButton.addActionListener(e -> stopServer());
         settingsButton.addActionListener(e -> openSettings());
-        broadcastButton.addActionListener(e -> {
-            String text = broadcastField.getText().trim();
-            if (text.isEmpty()) {
-                return;
-            }
-            if (runtime != null && runtime.isRunning()) {
-                runtime.broadcast(text);
-                appendLog("广播：" + text);
-                broadcastField.setText("");
-            } else {
-                appendLog("服务未启动，无法广播。");
-            }
-        });
-        recallButton.addActionListener(e -> {
-            if (runtime == null || !runtime.isRunning()) {
-                appendLog("服务未启动，无法撤回。");
-                return;
-            }
-            String value = recallSeqField.getText().trim();
-            long seq;
-            try {
-                seq = Long.parseLong(value);
-            } catch (NumberFormatException ex) {
-                appendLog("撤回序号无效：" + value);
-                return;
-            }
-            MessageService.RecallResult result = runtime.forceRecall(seq);
-            if (result.success) {
-                appendLog("已强制撤回 #" + seq + "：" + result.notice);
-                recallSeqField.setText("");
-            } else {
-                appendLog("撤回失败：" + result.errorMessage);
-            }
-        });
+        broadcastButton.addActionListener(e -> doBroadcast());
+        broadcastField.addActionListener(e -> doBroadcast());
+        recallButton.addActionListener(e -> doRecall());
+        recallSeqField.addActionListener(e -> doRecall());
+    }
+
+    private void doBroadcast() {
+        String text = broadcastField.getText().trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        if (runtime != null && runtime.isRunning()) {
+            runtime.broadcast(text);
+            appendLog("广播：" + text);
+            broadcastField.setText("");
+        } else {
+            appendLog("服务未启动，无法广播。");
+        }
+    }
+
+    private void doRecall() {
+        if (runtime == null || !runtime.isRunning()) {
+            appendLog("服务未启动，无法撤回。");
+            return;
+        }
+        String value = recallSeqField.getText().trim();
+        long seq;
+        try {
+            seq = Long.parseLong(value);
+        } catch (NumberFormatException ex) {
+            appendLog("撤回序号无效：" + value);
+            return;
+        }
+        MessageService.RecallResult result = runtime.forceRecall(seq);
+        if (result.success) {
+            appendLog("已强制撤回 #" + seq + "：" + result.notice);
+            recallSeqField.setText("");
+        } else {
+            appendLog("撤回失败：" + result.errorMessage);
+        }
     }
 
     private void startServer() {

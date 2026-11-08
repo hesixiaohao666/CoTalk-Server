@@ -27,14 +27,20 @@ public class ServerSettingsDialog extends JDialog {
 
     private final JTextField portField = new JTextField(10);
     private final JTextField maxClientsField = new JTextField(10);
+    private final JTextField joinTimeoutField = new JTextField(10);
+    private final JTextField heartbeatTimeoutField = new JTextField(10);
     private final JTextField roomNameField = new JTextField(24);
     private final JTextField announcementField = new JTextField(24);
+    private final JTextField roomAvatarField = new JTextField(24);
+    private final JButton browseRoomAvatarButton = new JButton("浏览…");
     private final JTextField dbPathField = new JTextField(24);
     private final JPasswordField authKeyField = new JPasswordField(24);
     private final JCheckBox showAuthKey = new JCheckBox("显示");
     private final JButton generateKeyButton = new JButton("生成随机");
 
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
+    private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
+    private final JCheckBox aiSystemMessagesCheck = new JCheckBox("允许 AI 读取系统消息");
     private final JPasswordField apiKeyField = new JPasswordField(24);
     private final JCheckBox showApiKey = new JCheckBox("显示");
     private final JTextField aiModelField = new JTextField(20);
@@ -112,8 +118,18 @@ public class ServerSettingsDialog extends JDialog {
         int row = 0;
         addRow(panel, row++, "服务器端口", portField, "1–65535");
         addRow(panel, row++, "最大连接数", maxClientsField, "大于 0");
+        addRow(panel, row++, "加入超时 (ms)", joinTimeoutField, "大于 0");
+        addRow(panel, row++, "心跳超时 (ms)", heartbeatTimeoutField, "大于 0");
         addRow(panel, row++, "房间名称", roomNameField, null);
         addRow(panel, row++, "房间公告", announcementField, null);
+
+        JPanel roomAvatarRow = new JPanel(new BorderLayout(6, 0));
+        roomAvatarRow.setOpaque(false);
+        roomAvatarRow.add(roomAvatarField, BorderLayout.CENTER);
+        roomAvatarRow.add(browseRoomAvatarButton, BorderLayout.EAST);
+        addRow(panel, row++, "房间头像", roomAvatarRow,
+                "PNG/JPG 路径，留空使用默认样式");
+
         addRow(panel, row++, "数据库路径", dbPathField, null);
 
         JPanel keyRow = new JPanel(new BorderLayout(6, 0));
@@ -129,8 +145,15 @@ public class ServerSettingsDialog extends JDialog {
         JTextField pathField = new JTextField(configPath.toAbsolutePath().toString());
         pathField.setEditable(false);
         addRow(panel, row++, "配置文件", pathField, "只读");
-        addNote(panel, row, "端口、连接密钥和 AI 配置修改后需要重启服务才生效。");
-        return panel;
+        addNote(panel, row,
+                "端口、连接密钥、超时、房间头像和 AI 配置修改后需要重启服务才生效。");
+
+        JScrollPane scroll = new JScrollPane(panel);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.add(scroll, BorderLayout.CENTER);
+        return wrapper;
     }
 
     private JPanel buildAiPanel() {
@@ -139,6 +162,10 @@ public class ServerSettingsDialog extends JDialog {
 
         addRow(form, row++, "AI 开关", aiEnabledCheck,
                 "关闭或未填写 API Key 时不会出现 AI 成员");
+        addRow(form, row++, "AI 识图", aiVisionCheck,
+                "关闭后只保留图片/表情的文字描述");
+        addRow(form, row++, "读取系统消息", aiSystemMessagesCheck,
+                "加入/退出/撤回/拍一拍/广播等");
 
         JPanel apiRow = new JPanel(new BorderLayout(6, 0));
         apiRow.setOpaque(false);
@@ -189,7 +216,8 @@ public class ServerSettingsDialog extends JDialog {
         addNote(form, row,
                 "强制提示词固定包含交流方式、法律道德底线和输出格式；"
                         + "自定义提示词只补充人设。被 @ 时必须回复，关键词按概率参与，"
-                        + "其他消息按随机概率参与。修改 AI 配置后需要重启服务。");
+                        + "其他消息按随机概率参与。系统消息只作为上下文，不单独触发回复；"
+                        + "频繁上下线只保留最后一条。修改 AI 配置后需要重启服务。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);
@@ -275,12 +303,17 @@ public class ServerSettingsDialog extends JDialog {
     private void fillFields() {
         portField.setText(String.valueOf(original.port));
         maxClientsField.setText(String.valueOf(original.maxClients));
+        joinTimeoutField.setText(String.valueOf(original.joinTimeoutMs));
+        heartbeatTimeoutField.setText(String.valueOf(original.heartbeatTimeoutMs));
         roomNameField.setText(original.roomName);
         announcementField.setText(original.roomAnnouncement);
+        roomAvatarField.setText(original.roomAvatar);
         dbPathField.setText(original.dbPath);
         authKeyField.setText(original.authKey);
 
         aiEnabledCheck.setSelected(original.aiEnabled);
+        aiVisionCheck.setSelected(original.aiVision);
+        aiSystemMessagesCheck.setSelected(original.aiSystemMessages);
         apiKeyField.setText(original.aiApiKey);
         aiModelField.setText(original.aiModel);
         aiBaseUrlField.setText(original.aiBaseUrl);
@@ -312,6 +345,7 @@ public class ServerSettingsDialog extends JDialog {
             setVisible(authKeyField, showAuthKey);
         });
         browseAvatarButton.addActionListener(e -> browseAvatar());
+        browseRoomAvatarButton.addActionListener(e -> browseRoomAvatar());
     }
 
     private void setVisible(JPasswordField field, JCheckBox toggle) {
@@ -319,15 +353,27 @@ public class ServerSettingsDialog extends JDialog {
     }
 
     private void browseAvatar() {
+        File file = chooseImageFile();
+        if (file != null) {
+            aiAvatarField.setText(file.getAbsolutePath());
+        }
+    }
+
+    private void browseRoomAvatar() {
+        File file = chooseImageFile();
+        if (file != null) {
+            roomAvatarField.setText(file.getAbsolutePath());
+        }
+    }
+
+    private File chooseImageFile() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter(
                 "图片 (*.png, *.jpg, *.jpeg)", "png", "jpg", "jpeg"));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            if (file != null) {
-                aiAvatarField.setText(file.getAbsolutePath());
-            }
+            return chooser.getSelectedFile();
         }
+        return null;
     }
 
     private void save() {
@@ -368,13 +414,22 @@ public class ServerSettingsDialog extends JDialog {
                 String.valueOf(readInt(portField, "服务器端口")));
         properties.setProperty("server.maxClients",
                 String.valueOf(readInt(maxClientsField, "最大连接数")));
+        properties.setProperty("server.joinTimeoutMs",
+                String.valueOf(readInt(joinTimeoutField, "加入超时")));
+        properties.setProperty("server.heartbeatTimeoutMs",
+                String.valueOf(readInt(heartbeatTimeoutField, "心跳超时")));
         properties.setProperty("room.name", roomName);
         properties.setProperty("room.announcement", text(announcementField));
+        properties.setProperty("room.avatar", text(roomAvatarField));
         properties.setProperty("db.path", dbPath);
         properties.setProperty("auth.key", authKey);
 
         properties.setProperty("ai.enabled",
                 String.valueOf(aiEnabledCheck.isSelected()));
+        properties.setProperty("ai.vision",
+                String.valueOf(aiVisionCheck.isSelected()));
+        properties.setProperty("ai.systemMessages",
+                String.valueOf(aiSystemMessagesCheck.isSelected()));
         properties.setProperty("ai.apiKey", password(apiKeyField));
         properties.setProperty("ai.model", text(aiModelField));
         properties.setProperty("ai.baseUrl", text(aiBaseUrlField));

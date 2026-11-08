@@ -394,6 +394,10 @@ public class AttachmentService {
             return detected;
         }
         if ("voice".equals(type)) {
+            String detected = detectAudioMime(bytes);
+            if (detected != null) {
+                return detected;
+            }
             if (!normalized.startsWith("audio/")
                     || normalized.length() > 60
                     || !normalized.matches("audio/[a-z0-9.+-]+")) {
@@ -467,6 +471,58 @@ public class AttachmentService {
                 && bytes[9] == 'E'
                 && bytes[10] == 'B'
                 && bytes[11] == 'P';
+    }
+
+    private static String detectAudioMime(byte[] bytes) {
+        if (bytes.length >= 12
+                && bytes[4] == 'f'
+                && bytes[5] == 't'
+                && bytes[6] == 'y'
+                && bytes[7] == 'p') {
+            return "audio/mp4";
+        }
+        if (bytes.length >= 4
+                && bytes[0] == 'O'
+                && bytes[1] == 'g'
+                && bytes[2] == 'g'
+                && bytes[3] == 'S') {
+            return "audio/ogg";
+        }
+        if (bytes.length >= 12
+                && bytes[0] == 'R'
+                && bytes[1] == 'I'
+                && bytes[2] == 'F'
+                && bytes[3] == 'F'
+                && bytes[8] == 'W'
+                && bytes[9] == 'A'
+                && bytes[10] == 'V'
+                && bytes[11] == 'E') {
+            return "audio/wav";
+        }
+        if (bytes.length >= 6
+                && bytes[0] == '#'
+                && bytes[1] == '!'
+                && bytes[2] == 'A'
+                && bytes[3] == 'M'
+                && bytes[4] == 'R') {
+            return "audio/amr";
+        }
+        if (bytes.length >= 3
+                && bytes[0] == 'I'
+                && bytes[1] == 'D'
+                && bytes[2] == '3') {
+            return "audio/mpeg";
+        }
+        if (bytes.length >= 2
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xE0) == 0xE0) {
+            // MPEG 音频帧或 AAC ADTS；按常见声明优先返回 audio/mpeg。
+            if ((bytes[1] & 0xF6) == 0xF0) {
+                return "audio/aac";
+            }
+            return "audio/mpeg";
+        }
+        return null;
     }
 
     private static String safeFileName(String fileName, String mime) {

@@ -52,6 +52,8 @@ public class ChatServer implements AiReplySink {
     private final AttachmentService attachmentService;
     private final ServerEvents events;
     private volatile AiResponder aiResponder = new NoopAiResponder();
+    private volatile String roomAvatarId = "";
+    private volatile int roomAvatarVersion;
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
     private final ExecutorService clientPool = Executors.newCachedThreadPool();
@@ -94,6 +96,19 @@ public class ChatServer implements AiReplySink {
     public boolean isAiActive() {
         AiResponder responder = aiResponder;
         return responder != null && responder.isActive();
+    }
+
+    public void setRoomAvatarInfo(String avatarId, int avatarVersion) {
+        this.roomAvatarId = avatarId == null ? "" : avatarId;
+        this.roomAvatarVersion = Math.max(0, avatarVersion);
+    }
+
+    public String getRoomAvatarId() {
+        return roomAvatarId;
+    }
+
+    public int getRoomAvatarVersion() {
+        return roomAvatarVersion;
     }
 
     public void start() throws IOException {
@@ -422,14 +437,45 @@ public class ChatServer implements AiReplySink {
             return;
         }
         JsonObject data = messageJson(message, false, false);
-        String line = JsonUtil.stringify(
+        String normalLine = JsonUtil.stringify(
                 Protocol.frame(Protocol.MESSAGE, null, data));
+
+        String legacyLine = normalLine;
+        if ("voice".equals(message.type)) {
+            JsonObject legacy = messageJsonForClient(
+                    message, false, false,
+                    VersionPolicy.VOICE_MIN_CLIENT_VERSION_CODE - 1);
+            legacyLine = JsonUtil.stringify(
+                    Protocol.frame(Protocol.MESSAGE, null, legacy));
+        }
 
         for (ClientHandler handler : new ArrayList<>(handlers)) {
             if (handler != exclude && handler.isJoined()) {
-                handler.sendLine(line);
+                handler.sendLine(handler.supportsVoice()
+                        ? normalLine : legacyLine);
             }
         }
+    }
+
+    /**
+     * 面向旧客户端时把语音降级为文字，避免旧端下载无法播放的音频。
+     */
+    public static JsonObject messageJsonForClient(Message message,
+                                                  boolean includeSelf,
+                                                  boolean self,
+                                                  int clientVersionCode) {
+        JsonObject json = messageJson(message, includeSelf, self);
+        if ("voice".equals(message.type)
+                && clientVersionCode < VersionPolicy.VOICE_MIN_CLIENT_VERSION_CODE) {
+            json.addProperty("type", "text");
+            json.addProperty("content", "[语音消息]");
+            json.remove("fileId");
+            json.remove("fileName");
+            json.remove("fileMime");
+            json.remove("fileSize");
+            json.remove("fileExpired");
+        }
+        return json;
     }
 
     public static JsonObject memberJson(Member member) {

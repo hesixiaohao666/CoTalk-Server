@@ -74,6 +74,7 @@ public class ClientHandler implements Runnable {
     private byte[] nonce;
     private Member member;
     private String clientTag = "";
+    private int clientVersionCode = -1;
     private long rateWindowStart;
     private int rateCount;
 
@@ -248,6 +249,7 @@ public class ClientHandler implements Runnable {
                     reqId));
             return false;
         }
+        this.clientVersionCode = clientVersionCode;
 
         nonce = new byte[16];
         new SecureRandom().nextBytes(nonce);
@@ -440,6 +442,8 @@ public class ClientHandler implements Runnable {
         roomJson.addProperty("announcement",
                 room.announcement == null ? "" : room.announcement);
         roomJson.addProperty("lastSeq", messageService.lastSeq());
+        roomJson.addProperty("avatarId", server.getRoomAvatarId());
+        roomJson.addProperty("avatarVersion", server.getRoomAvatarVersion());
         data.add("room", roomJson);
 
         JsonArray members = new JsonArray();
@@ -451,10 +455,11 @@ public class ClientHandler implements Runnable {
         JsonArray recent = new JsonArray();
         try {
             for (Message message : messageService.recent(config.historyRecent)) {
-                recent.add(ChatServer.messageJson(
+                recent.add(ChatServer.messageJsonForClient(
                         message,
                         true,
-                        ChatServer.isSelf(message, clientTag)
+                        ChatServer.isSelf(message, clientTag),
+                        clientVersionCode
                 ));
             }
         } catch (Exception e) {
@@ -604,6 +609,14 @@ public class ClientHandler implements Runnable {
                     "消息文字不能超过 1000 个字符", reqId));
             return;
         }
+        if ("voice".equals(type)) {
+            content = normalizeVoiceDuration(content);
+            if (content == null) {
+                send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                        "语音时长必须为 0–30000 毫秒", reqId));
+                return;
+            }
+        }
 
         AttachmentService.DecodedAttachment decoded;
         try {
@@ -651,6 +664,25 @@ public class ClientHandler implements Runnable {
         server.broadcastMessage(message, this);
         server.getEvents().onLog("[#" + seq + "] "
                 + member.nickname + ": " + logPreview);
+    }
+
+    /**
+     * 语音 content 约定为录音时长毫秒；旧客户端未传时按 0 处理。
+     */
+    private static String normalizeVoiceDuration(String content) {
+        String value = content == null ? "" : content.trim();
+        if (value.isEmpty()) {
+            return "0";
+        }
+        try {
+            long duration = Long.parseLong(value);
+            if (duration < 0 || duration > 30000) {
+                return null;
+            }
+            return String.valueOf(duration);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String previewFor(String type, String fileName) {
@@ -761,10 +793,11 @@ public class ClientHandler implements Runnable {
 
             JsonArray array = new JsonArray();
             for (Message message : messages) {
-                array.add(ChatServer.messageJson(
+                array.add(ChatServer.messageJsonForClient(
                         message,
                         true,
-                        ChatServer.isSelf(message, clientTag)
+                        ChatServer.isSelf(message, clientTag),
+                        clientVersionCode
                 ));
             }
 
@@ -867,6 +900,14 @@ public class ClientHandler implements Runnable {
 
     public String getClientTag() {
         return clientTag;
+    }
+
+    public int getClientVersionCode() {
+        return clientVersionCode;
+    }
+
+    public boolean supportsVoice() {
+        return clientVersionCode >= VersionPolicy.VOICE_MIN_CLIENT_VERSION_CODE;
     }
 
     public Member getMember() {

@@ -305,10 +305,30 @@ public class DeepSeekAiResponder implements AiResponder {
 
         int max = Math.max(1, config.aiMaxContext);
         int start = Math.max(0, context.size() - max);
-        Set<String> selectedImageIds = selectRecentImageIds(context, start);
+        Set<String> selectedImageIds = config.aiVision
+                ? selectRecentImageIds(context, start)
+                : Collections.emptySet();
+        int lastJoinLeave = config.aiSystemMessages
+                ? lastJoinLeaveIndex(context, start)
+                : -1;
         for (int i = start; i < context.size(); i++) {
             Message message = context.get(i);
-            if (message == null || "system".equals(message.type)) {
+            if (message == null) {
+                continue;
+            }
+            if ("system".equals(message.type)) {
+                if (!config.aiSystemMessages) {
+                    continue;
+                }
+                if (isJoinLeave(message) && i != lastJoinLeave) {
+                    continue;
+                }
+                String content = message.content == null
+                        ? "" : message.content.trim();
+                if (content.isEmpty()) {
+                    continue;
+                }
+                result.add(new AiMessage("user", "[系统] " + content));
                 continue;
             }
 
@@ -374,6 +394,29 @@ public class DeepSeekAiResponder implements AiResponder {
             result.add(new AiMessage("user", prompt.toString().trim()));
         }
         return result;
+    }
+
+    /**
+     * 频繁上下线只保留上下文窗口内最后一条加入/离开消息。
+     */
+    private static int lastJoinLeaveIndex(List<Message> context, int start) {
+        int last = -1;
+        for (int i = start; i < context.size(); i++) {
+            if (isJoinLeave(context.get(i))) {
+                last = i;
+            }
+        }
+        return last;
+    }
+
+    private static boolean isJoinLeave(Message message) {
+        if (message == null || !"system".equals(message.type)
+                || message.content == null) {
+            return false;
+        }
+        String content = message.content;
+        return content.contains("加入了群聊")
+                || content.contains("离开了群聊");
     }
 
     private ParsedReply parseReply(String raw) {

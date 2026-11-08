@@ -72,6 +72,10 @@ public final class ServerRuntime {
             if (aiMember != null) {
                 roomService.setAiMember(aiMember);
             }
+            int roomAvatarVersion = RoomAvatarService.prepare(
+                    config, avatarService, events);
+            chatServer.setRoomAvatarInfo(
+                    RoomAvatarService.ROOM_AVATAR_ID, roomAvatarVersion);
             chatServer.setAiResponder(
                     AiResponderFactory.create(config, chatServer, fileId -> {
                         AttachmentService.FileData file =
