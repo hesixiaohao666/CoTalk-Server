@@ -44,11 +44,11 @@ public final class HeadlessConsole {
 
         ServerConfig config = result.config;
         log("CoTalk " + ServerVersion.VERSION_NAME
-                + "（" + ServerVersion.VERSION_CODE + "）终端模式");
+                + " 终端模式");
         log("配置文件：" + result.path);
         if (result.keyGenerated) {
             log("已生成连接密钥：" + result.generatedKey
-                    + "（请复制到客户端；也可在 config.properties 修改）");
+                    + "，请复制到客户端，也可在 config.properties 修改");
         }
         log("客户端版本允许区间："
                 + VersionPolicy.MIN_CLIENT_VERSION_CODE + "–"
@@ -212,7 +212,7 @@ public final class HeadlessConsole {
             log("配置文件：" + ServerConfigStore.DEFAULT_PATH.toAbsolutePath());
             return;
         }
-        log("未知命令：" + command + "（输入 help 查看命令）");
+        log("未知命令：" + command + "，输入 help 查看命令");
     }
 
     private static String aiStatus(ServerConfig config) {

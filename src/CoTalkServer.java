@@ -139,7 +139,7 @@ public class CoTalkServer extends JFrame {
         });
 
         appendLog("CoTalk " + ServerVersion.VERSION_NAME + " 服务端已就绪。");
-        appendLog("点击“启动服务”后按 config.properties 监听端口。");
+        appendLog("启动服务后按 config.properties 监听端口。");
     }
 
     private JPanel buildHeader(Font titleFont, Font boldFont) {
@@ -197,7 +197,7 @@ public class CoTalkServer extends JFrame {
         memberList.setFixedCellHeight(38);
         memberList.setBackground(Color.WHITE);
         memberList.setCellRenderer(new MemberCellRenderer());
-        memberModel.addElement("（暂无在线成员）");
+        memberModel.addElement("暂无在线成员");
         JScrollPane memberScroll = new JScrollPane(memberList);
         memberScroll.setBorder(null);
         memberScroll.getViewport().setBackground(Color.WHITE);
@@ -306,7 +306,7 @@ public class CoTalkServer extends JFrame {
                     ? list.getSelectionBackground() : Color.WHITE);
 
             String text = String.valueOf(value);
-            if (text.startsWith("（")) {
+            if (text.startsWith("暂无")) {
                 label.setText(text);
                 label.setForeground(new Color(0x999999));
                 return label;
@@ -459,7 +459,7 @@ public class CoTalkServer extends JFrame {
             }
             if (configResult.keyGenerated) {
                 appendLog("已生成连接密钥：" + configResult.generatedKey
-                        + "（请复制到客户端）");
+                        + "，请复制到客户端");
             }
 
             runtime = new ServerRuntime(config, events);
@@ -495,7 +495,7 @@ public class CoTalkServer extends JFrame {
             }
             if (loaded.keyGenerated) {
                 appendLog("已生成连接密钥：" + loaded.generatedKey
-                        + "（请复制到客户端）");
+                        + "，请复制到客户端");
             }
 
             ServerSettingsDialog dialog = new ServerSettingsDialog(
@@ -553,7 +553,7 @@ public class CoTalkServer extends JFrame {
         memberCountLabel.setText("0 人");
         memberBorder.setTitle("在线成员");
         memberModel.clear();
-        memberModel.addElement("（暂无在线成员）");
+        memberModel.addElement("暂无在线成员");
         startButton.setEnabled(true);
         stopButton.setEnabled(false);
     }
@@ -573,7 +573,7 @@ public class CoTalkServer extends JFrame {
             memberListPanel.repaint();
         }
         if (members.isEmpty()) {
-            memberModel.addElement("（暂无在线成员）");
+            memberModel.addElement("暂无在线成员");
         } else {
             for (Member member : members) {
                 memberModel.addElement(member.nickname + (member.ai ? " [AI]" : ""));

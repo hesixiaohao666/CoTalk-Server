@@ -118,8 +118,8 @@ public class ServerSettingsDialog extends JDialog {
         int row = 0;
         addRow(panel, row++, "服务器端口", portField, "1–65535");
         addRow(panel, row++, "最大连接数", maxClientsField, "大于 0");
-        addRow(panel, row++, "加入超时 (ms)", joinTimeoutField, "大于 0");
-        addRow(panel, row++, "心跳超时 (ms)", heartbeatTimeoutField, "大于 0");
+        addRow(panel, row++, "加入超时", joinTimeoutField, "毫秒，大于 0");
+        addRow(panel, row++, "心跳超时", heartbeatTimeoutField, "毫秒，大于 0");
         addRow(panel, row++, "房间名称", roomNameField, null);
         addRow(panel, row++, "房间公告", announcementField, null);
 
@@ -181,8 +181,8 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "AI 昵称", aiNameField, null);
         addRow(form, row++, "@ 触发词", aiMentionsField, "逗号分隔");
         addRow(form, row++, "参与关键词", aiKeywordsField, "如：大肥鱼,鱼,AI");
-        addRow(form, row++, "关键词概率 (%)", aiKeywordChanceField, "0–100");
-        addRow(form, row++, "随机参与概率 (%)", aiRandomChanceField, "0–100");
+        addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
+        addRow(form, row++, "随机参与概率", aiRandomChanceField, "0–100");
 
         JPanel avatarRow = new JPanel(new BorderLayout(6, 0));
         avatarRow.setOpaque(false);
@@ -196,7 +196,7 @@ public class ServerSettingsDialog extends JDialog {
         aiForcedPromptArea.setBackground(new Color(0xF2F2F2));
         JScrollPane forcedPromptScroll = new JScrollPane(aiForcedPromptArea);
         forcedPromptScroll.setPreferredSize(new Dimension(420, 100));
-        addRow(form, row++, "强制提示词（只读）", forcedPromptScroll,
+        addRow(form, row++, "强制提示词", forcedPromptScroll,
                 "由程序固定，不可修改");
 
         aiPromptArea.setLineWrap(true);
@@ -206,13 +206,13 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "自定义提示词", promptScroll,
                 "用于大肥鱼人设和表达风格");
 
-        addRow(form, row++, "回复冷却 (ms)", aiCooldownField, null);
+        addRow(form, row++, "回复冷却", aiCooldownField, "毫秒");
         addRow(form, row++, "上下文条数", aiMaxContextField, null);
-        addRow(form, row++, "请求超时 (ms)", aiTimeoutField, null);
+        addRow(form, row++, "请求超时", aiTimeoutField, "毫秒");
         addRow(form, row++, "maxTokens", aiMaxTokensField, null);
         addRow(form, row++, "单条最大字符", aiMessageMaxCharsField, "默认 30");
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 5，最多 10");
-        addRow(form, row++, "多条间隔 (ms)", aiReplyDelayField, "默认 600");
+        addRow(form, row++, "多条间隔", aiReplyDelayField, "毫秒，默认 600");
         addNote(form, row,
                 "强制提示词固定包含交流方式、法律道德底线和输出格式；"
                         + "自定义提示词只补充人设。被 @ 时必须回复，关键词按概率参与，"
@@ -369,7 +369,7 @@ public class ServerSettingsDialog extends JDialog {
     private File chooseImageFile() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter(
-                "图片 (*.png, *.jpg, *.jpeg)", "png", "jpg", "jpeg"));
+                "图片文件", "png", "jpg", "jpeg"));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             return chooser.getSelectedFile();
         }
