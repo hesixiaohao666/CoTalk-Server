@@ -14,7 +14,7 @@ import java.sql.Statement;
  */
 public class Database implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 3;
+    private static final int SCHEMA_VERSION = 4;
 
     private final String path;
     private Connection connection;
@@ -66,6 +66,7 @@ public class Database implements AutoCloseable {
                     + "file_size INTEGER NOT NULL DEFAULT 0, "
                     + "file_expired INTEGER NOT NULL DEFAULT 0, "
                     + "recalled INTEGER NOT NULL DEFAULT 0, "
+                    + "recall_notice TEXT, "
                     + "created_at INTEGER NOT NULL"
                     + ")");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_message_seq "
@@ -117,6 +118,8 @@ public class Database implements AutoCloseable {
             // v2 -> v3：撤回只增加标记，原消息内容与附件元数据保留。
             addColumnIfMissing(statement, "message", "recalled",
                     "INTEGER NOT NULL DEFAULT 0");
+            // v3 -> v4：撤回提示需要区分用户撤回和管理员强制撤回。
+            addColumnIfMissing(statement, "message", "recall_notice", "TEXT");
 
             if (userVersion < SCHEMA_VERSION) {
                 statement.execute("PRAGMA user_version=" + SCHEMA_VERSION);

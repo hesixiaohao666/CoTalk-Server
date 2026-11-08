@@ -19,5 +19,6 @@ public class Message {
     public long fileSize;
     public boolean fileExpired;
     public boolean recalled;
+    public String recallNotice;
     public long createdAt;
 }

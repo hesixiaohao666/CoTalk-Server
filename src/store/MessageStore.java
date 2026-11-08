@@ -20,7 +20,7 @@ public class MessageStore {
             "msg_uuid, seq, sender_id, sender_name, sender_tag, "
                     + "sender_avatar_version, content, msg_type, "
                     + "file_id, file_name, file_mime, file_size, file_expired, "
-                    + "recalled, created_at";
+                    + "recalled, recall_notice, created_at";
 
     private final Database database;
 
@@ -136,13 +136,14 @@ public class MessageStore {
     /**
      * 只设置撤回标记，原消息内容和附件元数据保持不动。
      */
-    public boolean markRecalled(String msgUuid) throws SQLException {
+    public boolean markRecalled(String msgUuid, String notice) throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();
             try (PreparedStatement statement = connection.prepareStatement(
-                    "UPDATE message SET recalled = 1 "
+                    "UPDATE message SET recalled = 1, recall_notice = ? "
                             + "WHERE msg_uuid = ? AND recalled = 0")) {
-                statement.setString(1, msgUuid);
+                statement.setString(1, notice);
+                statement.setString(2, msgUuid);
                 return statement.executeUpdate() > 0;
             }
         }
@@ -215,7 +216,10 @@ public class MessageStore {
             masked.senderName = "系统";
             masked.senderTag = "";
             masked.senderAvatarVersion = 0;
-            masked.content = recalledNotice(message.senderName);
+            masked.content = message.recallNotice == null
+                    || message.recallNotice.trim().isEmpty()
+                    ? recalledNotice(message.senderName)
+                    : message.recallNotice;
             masked.type = "system";
             masked.createdAt = message.createdAt;
             masked.recalled = true;
@@ -249,6 +253,7 @@ public class MessageStore {
             message.fileSize = result.getLong("file_size");
             message.fileExpired = result.getInt("file_expired") != 0;
             message.recalled = result.getInt("recalled") != 0;
+            message.recallNotice = result.getString("recall_notice");
             message.createdAt = result.getLong("created_at");
             messages.add(message);
         }

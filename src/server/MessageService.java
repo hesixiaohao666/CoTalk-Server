@@ -178,20 +178,20 @@ public class MessageService {
                         "消息已超过 2 分钟，无法撤回");
             }
         }
-        if (!messageStore.markRecalled(message.msgUuid)) {
+        String sender = message.senderName == null
+                || message.senderName.trim().isEmpty()
+                ? "用户"
+                : message.senderName.trim();
+        String notice = force
+                ? "管理员撤回了 " + sender + " 一条消息"
+                : sender + " 撤回了一条消息";
+        if (!messageStore.markRecalled(message.msgUuid, notice)) {
             return RecallResult.failure(Protocol.ERR_RECALL_STATE,
                     "消息不可撤回");
         }
         message.recalled = true;
-        String notice = recalledNotice(message.senderName);
+        message.recallNotice = notice;
         return RecallResult.success(message, notice, message.fileId);
-    }
-
-    private static String recalledNotice(String senderName) {
-        String name = senderName == null || senderName.trim().isEmpty()
-                ? "用户"
-                : senderName.trim();
-        return name + " 撤回了一条消息";
     }
 
     public List<Message> recent(int limit) throws SQLException {
