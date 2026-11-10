@@ -473,6 +473,11 @@ public class ClientHandler implements Runnable {
         serverInfo.addProperty("versionCode", ServerVersion.VERSION_CODE);
         serverInfo.addProperty("aiEnabled", server.isAiActive());
         serverInfo.addProperty("aiName", config.aiName);
+        JsonObject features = new JsonObject();
+        features.addProperty("image", config.featureImage);
+        features.addProperty("voice", config.featureVoice);
+        features.addProperty("emoji", config.featureEmoji);
+        serverInfo.add("features", features);
         data.add("server", serverInfo);
 
         send(Protocol.frame(Protocol.JOIN_OK, reqId, data));
@@ -616,6 +621,13 @@ public class ClientHandler implements Runnable {
                         "语音时长必须为 0–30000 毫秒", reqId));
                 return;
             }
+        }
+        if (("image".equals(type) && !config.featureImage)
+                || ("voice".equals(type) && !config.featureVoice)
+                || ("emoji".equals(type) && !config.featureEmoji)) {
+            send(Protocol.error(Protocol.ERR_FEATURE_DISABLED,
+                    "房间未启用该功能", reqId));
+            return;
         }
 
         AttachmentService.DecodedAttachment decoded;

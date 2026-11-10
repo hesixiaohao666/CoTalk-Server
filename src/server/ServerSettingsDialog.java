@@ -38,6 +38,10 @@ public class ServerSettingsDialog extends JDialog {
     private final JCheckBox showAuthKey = new JCheckBox("显示");
     private final JButton generateKeyButton = new JButton("生成随机");
 
+    private final JCheckBox featureImageCheck = new JCheckBox("启用图片发送");
+    private final JCheckBox featureVoiceCheck = new JCheckBox("启用语音发送");
+    private final JCheckBox featureEmojiCheck = new JCheckBox("启用表情包发送");
+
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
     private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
     private final JCheckBox aiSystemMessagesCheck = new JCheckBox("允许 AI 读取系统消息");
@@ -76,6 +80,10 @@ public class ServerSettingsDialog extends JDialog {
         setMinimumSize(new Dimension(700, 580));
         positionTopCenter();
         applyFont(getContentPane(), uiFont(Font.PLAIN, 14));
+        styleFields();
+        styleButton(generateKeyButton, false);
+        styleButton(browseAvatarButton, false);
+        styleButton(browseRoomAvatarButton, false);
     }
 
     private void positionTopCenter() {
@@ -96,9 +104,10 @@ public class ServerSettingsDialog extends JDialog {
         content.setBorder(new EmptyBorder(8, 8, 8, 8));
 
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("服务器", buildServerPanel());
-        tabs.addTab("AI", buildAiPanel());
-        tabs.addTab("版本", buildVersionPanel());
+        tabs.addTab("通用", buildGeneralPanel());
+        tabs.addTab("管理员", buildAdminPanel());
+        tabs.addTab("AI功能", buildAiPanel());
+        tabs.addTab("关于CoTalk-Server", buildAboutPanel());
         content.add(tabs, BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 4));
@@ -106,6 +115,8 @@ public class ServerSettingsDialog extends JDialog {
         JButton cancelButton = new JButton("取消");
         saveButton.addActionListener(e -> save());
         cancelButton.addActionListener(e -> dispose());
+        styleButton(saveButton, true);
+        styleButton(cancelButton, false);
         buttons.add(saveButton);
         buttons.add(cancelButton);
         content.add(buttons, BorderLayout.SOUTH);
@@ -113,7 +124,7 @@ public class ServerSettingsDialog extends JDialog {
         return content;
     }
 
-    private JPanel buildServerPanel() {
+    private JPanel buildGeneralPanel() {
         JPanel panel = formPanel();
         int row = 0;
         addRow(panel, row++, "服务器端口", portField, "1–65535");
@@ -130,6 +141,13 @@ public class ServerSettingsDialog extends JDialog {
         addRow(panel, row++, "房间头像", roomAvatarRow,
                 "PNG/JPG 路径，留空使用默认样式");
 
+        addRow(panel, row++, "图片发送", featureImageCheck,
+                "关闭后拒绝客户端图片");
+        addRow(panel, row++, "语音发送", featureVoiceCheck,
+                "关闭后拒绝客户端语音");
+        addRow(panel, row++, "表情包发送", featureEmojiCheck,
+                "关闭后拒绝客户端表情包");
+
         addRow(panel, row++, "数据库路径", dbPathField, null);
 
         JPanel keyRow = new JPanel(new BorderLayout(6, 0));
@@ -144,9 +162,10 @@ public class ServerSettingsDialog extends JDialog {
 
         JTextField pathField = new JTextField(configPath.toAbsolutePath().toString());
         pathField.setEditable(false);
+        styleField(pathField);
         addRow(panel, row++, "配置文件", pathField, "只读");
         addNote(panel, row,
-                "端口、连接密钥、超时、房间头像和 AI 配置修改后需要重启服务才生效。");
+                "端口、连接密钥、超时、房间头像、功能开关和 AI 配置修改后需要重启服务才生效。");
 
         JScrollPane scroll = new JScrollPane(panel);
         scroll.setBorder(null);
@@ -227,7 +246,39 @@ public class ServerSettingsDialog extends JDialog {
         return panel;
     }
 
-    private JPanel buildVersionPanel() {
+    private JPanel buildAdminPanel() {
+        JPanel panel = formPanel();
+        JPanel content = new JPanel(new BorderLayout(0, 12));
+        content.setOpaque(false);
+
+        JLabel note = new JLabel("管理员模式用于未来的服务端管理能力。");
+        note.setForeground(new Color(0x777777));
+        content.add(note, BorderLayout.NORTH);
+
+        JButton adminButton = new JButton("管理员模式");
+        styleButton(adminButton, true);
+        adminButton.addActionListener(e -> JOptionPane.showMessageDialog(
+                this,
+                "管理员模式暂未实装，敬请期待",
+                "管理员",
+                JOptionPane.INFORMATION_MESSAGE));
+        JPanel actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        actionRow.setOpaque(false);
+        actionRow.add(adminButton);
+        content.add(actionRow, BorderLayout.CENTER);
+
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = 0;
+        constraints.gridy = 0;
+        constraints.weightx = 1;
+        constraints.weighty = 1;
+        constraints.fill = GridBagConstraints.BOTH;
+        constraints.anchor = GridBagConstraints.NORTHWEST;
+        panel.add(content, constraints);
+        return panel;
+    }
+
+    private JPanel buildAboutPanel() {
         JPanel panel = formPanel();
         int row = 0;
         addRow(panel, row++, "服务端版本",
@@ -239,9 +290,46 @@ public class ServerSettingsDialog extends JDialog {
         addRow(panel, row++, "客户端版本区间",
                 readOnlyField(VersionPolicy.MIN_CLIENT_VERSION_CODE
                         + "–" + VersionPolicy.MAX_CLIENT_VERSION_CODE), null);
+
+        addRow(panel, row++, "技术栈", readOnlyArea(
+                "客户端：Android Java / XML\n"
+                        + "服务端：Java / Swing / Headless\n"
+                        + "数据存储：SQLite\n"
+                        + "网络通信：TCP Socket NDJSON"), null);
+        addRow(panel, row++, "更新日志", readOnlyArea(
+                "v0.3.3\n"
+                        + "- 新增图片、语音、表情包功能开关\n"
+                        + "- 新增管理员页占位与关于页\n"
+                        + "- 统一服务端界面与输入框样式\n"
+                        + "- 优化服务端校验与代码结构"), null);
+        addRow(panel, row++, "开发信息", readOnlyArea(
+                "作者：何似小浩\n"
+                        + "客户端：https://github.com/hesixiaohao666/CoTalk\n"
+                        + "服务端：https://github.com/hesixiaohao666/CoTalk-Server"), null);
         addNote(panel, row,
-                "版本区间由服务端代码常量控制，此处只读；修改后需重新编译服务端。");
-        return panel;
+                "以上内容为只读信息；版本区间由服务端代码常量控制。");
+
+        JScrollPane scroll = new JScrollPane(panel);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.add(scroll, BorderLayout.CENTER);
+        return wrapper;
+    }
+
+    private JScrollPane readOnlyArea(String text) {
+        JTextArea area = new JTextArea(text, 4, 32);
+        area.setEditable(false);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setOpaque(false);
+        area.setBorder(new EmptyBorder(0, 0, 0, 0));
+        area.setForeground(new Color(0x555555));
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setPreferredSize(new Dimension(420, 92));
+        scroll.setBorder(BorderFactory.createLineBorder(
+                new Color(0xD0D0D0)));
+        return scroll;
     }
 
     private JPanel formPanel() {
@@ -300,6 +388,44 @@ public class ServerSettingsDialog extends JDialog {
         return field;
     }
 
+    private void styleFields() {
+        JTextField[] fields = {
+                portField, maxClientsField, joinTimeoutField,
+                heartbeatTimeoutField, roomNameField, announcementField,
+                roomAvatarField, dbPathField, authKeyField,
+                apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
+                aiMentionsField, aiKeywordsField, aiKeywordChanceField,
+                aiRandomChanceField, aiAvatarField, aiCooldownField,
+                aiMaxContextField, aiTimeoutField, aiMaxTokensField,
+                aiMessageMaxCharsField, aiMaxMessagesField, aiReplyDelayField
+        };
+        for (JTextField field : fields) {
+            styleField(field);
+        }
+    }
+
+    private static void styleField(JTextField field) {
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(0xB8B8B8), 1, true),
+                new EmptyBorder(4, 8, 4, 8)));
+        field.setBackground(Color.WHITE);
+    }
+
+    private static void styleButton(JButton button, boolean primary) {
+        button.setFont(uiFont(Font.PLAIN, 14));
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+        button.setOpaque(true);
+        button.setBackground(primary ? new Color(0x66CCFF) : Color.WHITE);
+        button.setForeground(Color.BLACK);
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        primary ? new Color(0x33B5E5) : new Color(0x66CCFF),
+                        1, true),
+                new EmptyBorder(5, 12, 5, 12)));
+    }
+
     private void fillFields() {
         portField.setText(String.valueOf(original.port));
         maxClientsField.setText(String.valueOf(original.maxClients));
@@ -310,6 +436,10 @@ public class ServerSettingsDialog extends JDialog {
         roomAvatarField.setText(original.roomAvatar);
         dbPathField.setText(original.dbPath);
         authKeyField.setText(original.authKey);
+
+        featureImageCheck.setSelected(original.featureImage);
+        featureVoiceCheck.setSelected(original.featureVoice);
+        featureEmojiCheck.setSelected(original.featureEmoji);
 
         aiEnabledCheck.setSelected(original.aiEnabled);
         aiVisionCheck.setSelected(original.aiVision);
@@ -423,6 +553,13 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("room.avatar", text(roomAvatarField));
         properties.setProperty("db.path", dbPath);
         properties.setProperty("auth.key", authKey);
+
+        properties.setProperty("features.image",
+                String.valueOf(featureImageCheck.isSelected()));
+        properties.setProperty("features.voice",
+                String.valueOf(featureVoiceCheck.isSelected()));
+        properties.setProperty("features.emoji",
+                String.valueOf(featureEmojiCheck.isSelected()));
 
         properties.setProperty("ai.enabled",
                 String.valueOf(aiEnabledCheck.isSelected()));

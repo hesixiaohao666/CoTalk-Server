@@ -62,8 +62,8 @@ public class CoTalkServer extends JFrame {
     private final JButton startButton = new JButton("启动服务");
     private final JButton stopButton = new JButton("停止服务");
     private final JButton settingsButton = new JButton("设置");
-    private final JButton broadcastButton = new JButton("广播");
-    private final JButton recallButton = new JButton("撤回消息");
+    private final JButton broadcastButton = new JButton("发送");
+    private final JButton recallButton = new JButton("确定");
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
 
@@ -336,37 +336,67 @@ public class CoTalkServer extends JFrame {
     }
 
     private JPanel buildFooter(Font baseFont, Font boldFont) {
-        JPanel footer = new JPanel(new BorderLayout(10, 4));
+        JPanel footer = new JPanel(new BorderLayout(0, 8));
         footer.setBorder(new EmptyBorder(10, 16, 14, 16));
         footer.setBackground(new Color(0xF5F5F5));
 
-        JPanel broadcastRow = new JPanel(new BorderLayout(10, 0));
-        broadcastRow.setOpaque(false);
-        JLabel label = new JLabel("广播消息");
-        label.setFont(boldFont);
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setOpaque(false);
+        styleField(broadcastField);
+        styleField(recallSeqField);
         broadcastField.setFont(baseFont);
-        broadcastField.setPreferredSize(new Dimension(200, 38));
-        styleButton(broadcastButton, boldFont);
-        broadcastButton.setPreferredSize(new Dimension(90, 38));
-        broadcastRow.add(label, BorderLayout.WEST);
-        broadcastRow.add(broadcastField, BorderLayout.CENTER);
-        broadcastRow.add(broadcastButton, BorderLayout.EAST);
-
-        JPanel recallRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        recallRow.setOpaque(false);
-        JLabel recallLabel = new JLabel("撤回序号");
-        recallLabel.setFont(boldFont);
         recallSeqField.setFont(baseFont);
-        recallSeqField.setPreferredSize(new Dimension(120, 34));
+        styleButton(broadcastButton, boldFont);
         styleButton(recallButton, boldFont);
-        recallButton.setPreferredSize(new Dimension(110, 34));
-        recallRow.add(recallLabel);
-        recallRow.add(recallSeqField);
-        recallRow.add(recallButton);
 
-        footer.add(broadcastRow, BorderLayout.NORTH);
-        footer.add(recallRow, BorderLayout.SOUTH);
+        addFooterRow(form, 0, "发送广播", broadcastField,
+                broadcastButton, boldFont);
+        addFooterRow(form, 1, "撤回序号", recallSeqField,
+                recallButton, boldFont);
+        footer.add(form, BorderLayout.CENTER);
         return footer;
+    }
+
+    private void addFooterRow(JPanel panel,
+                              int row,
+                              String labelText,
+                              JTextField field,
+                              JButton button,
+                              Font boldFont) {
+        JLabel label = new JLabel(labelText);
+        label.setFont(boldFont);
+        label.setPreferredSize(new Dimension(88, 36));
+        GridBagConstraints labelConstraints = new GridBagConstraints();
+        labelConstraints.gridx = 0;
+        labelConstraints.gridy = row;
+        labelConstraints.anchor = GridBagConstraints.WEST;
+        labelConstraints.insets = new Insets(0, 0, 6, 10);
+        panel.add(label, labelConstraints);
+
+        field.setPreferredSize(new Dimension(200, 36));
+        field.setMinimumSize(new Dimension(120, 36));
+        GridBagConstraints fieldConstraints = new GridBagConstraints();
+        fieldConstraints.gridx = 1;
+        fieldConstraints.gridy = row;
+        fieldConstraints.weightx = 1;
+        fieldConstraints.fill = GridBagConstraints.HORIZONTAL;
+        fieldConstraints.insets = new Insets(0, 0, 6, 10);
+        panel.add(field, fieldConstraints);
+
+        button.setPreferredSize(new Dimension(90, 36));
+        GridBagConstraints buttonConstraints = new GridBagConstraints();
+        buttonConstraints.gridx = 2;
+        buttonConstraints.gridy = row;
+        buttonConstraints.anchor = GridBagConstraints.EAST;
+        buttonConstraints.insets = new Insets(0, 0, 6, 0);
+        panel.add(button, buttonConstraints);
+    }
+
+    private static void styleField(JTextField field) {
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(0xB8B8B8), 1, true),
+                new EmptyBorder(4, 8, 4, 8)));
+        field.setBackground(Color.WHITE);
     }
 
     private JLabel label(String text, Font font) {
