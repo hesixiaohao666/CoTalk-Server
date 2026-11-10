@@ -107,7 +107,7 @@ public class ServerSettingsDialog extends JDialog {
         tabs.addTab("通用", buildGeneralPanel());
         tabs.addTab("管理员", buildAdminPanel());
         tabs.addTab("AI功能", buildAiPanel());
-        tabs.addTab("关于CoTalk-Server", buildAboutPanel());
+        tabs.addTab("关于", buildAboutPanel());
         content.add(tabs, BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 4));

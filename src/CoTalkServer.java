@@ -351,7 +351,7 @@ public class CoTalkServer extends JFrame {
 
         addFooterRow(form, 0, "发送广播", broadcastField,
                 broadcastButton, boldFont);
-        addFooterRow(form, 1, "撤回序号", recallSeqField,
+        addFooterRow(form, 1, "撤回消息", recallSeqField,
                 recallButton, boldFont);
         footer.add(form, BorderLayout.CENTER);
         return footer;
