@@ -292,20 +292,24 @@ public class ServerSettingsDialog extends JDialog {
                         + "–" + VersionPolicy.MAX_CLIENT_VERSION_CODE), null);
 
         addRow(panel, row++, "技术栈", readOnlyArea(
-                "客户端：Android Java / XML\n"
-                        + "服务端：Java / Swing / Headless\n"
+                "服务端：Java / Swing / Headless\n"
+                        + "客户端：Android Java / XML\n"
                         + "数据存储：SQLite\n"
-                        + "网络通信：TCP Socket NDJSON"), null);
+                        + "网络通信：TCP Socket (NDJSON)"), null);
         addRow(panel, row++, "更新日志", readOnlyArea(
-                "v0.3.3\n"
-                        + "- 新增图片、语音、表情包功能开关\n"
-                        + "- 新增管理员页占位与关于页\n"
-                        + "- 统一服务端界面与输入框样式\n"
-                        + "- 优化服务端校验与代码结构"), null);
+                "版本：0.3.3(beta)\n"
+                        + "更新时间：2026-11-10\n"
+                        + "- 新增功能开关：支持在设置中全局开启/关闭图片、语音、表情包的发送\n"
+                        + "- 界面视觉重构：统一界面字体、颜色与边距；修复输入框边框缺失问题\n"
+                        + "- 交互区域优化：广播与撤回区域调整对齐，输入框限制长度，支持回车发送\n"
+                        + "- 设置面板升级：页签重构为“通用/管理员/AI功能/关于”，新增管理员占位与关于页\n"
+                        + "- 修复了一些已知问题\n"
+                        + "- 此次更新兼容 v0.3.1(beta)-v0.3.2(beta) 版本的服务端"), null);
         addRow(panel, row++, "开发信息", readOnlyArea(
                 "作者：何似小浩\n"
-                        + "客户端：https://github.com/hesixiaohao666/CoTalk\n"
-                        + "服务端：https://github.com/hesixiaohao666/CoTalk-Server"), null);
+                        + "开源仓库：\n"
+                        + "CoTalk 客户端：https://github.com/hesixiaohao666/CoTalk\n"
+                        + "CoTalk 服务端：https://github.com/hesixiaohao666/CoTalk-Server"), null);
         addNote(panel, row,
                 "以上内容为只读信息；版本区间由服务端代码常量控制。");
 
