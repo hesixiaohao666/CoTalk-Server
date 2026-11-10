@@ -52,6 +52,7 @@ public final class Protocol {
     public static final int ERR_RECALL_EXPIRED = 2013;
     public static final int ERR_RECALL_STATE = 2014;
     public static final int ERR_POKE_TARGET = 2015;
+    public static final int ERR_FEATURE_DISABLED = 2016;
 
     public static final int ERR_AUTH_FAILED = 3001;
     public static final int ERR_CLIENT_VERSION = 3002;

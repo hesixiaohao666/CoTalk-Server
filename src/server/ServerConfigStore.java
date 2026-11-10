@@ -22,7 +22,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    private static final String CONFIG_VERSION = "3";
+    private static final String CONFIG_VERSION = "4";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -85,7 +85,10 @@ public final class ServerConfigStore {
                     || !loaded.containsKey("ai.randomChance")
                     || !loaded.containsKey("room.avatar")
                     || !loaded.containsKey("ai.vision")
-                    || !loaded.containsKey("ai.systemMessages");
+                    || !loaded.containsKey("ai.systemMessages")
+                    || !loaded.containsKey("features.image")
+                    || !loaded.containsKey("features.voice")
+                    || !loaded.containsKey("features.emoji");
             configVersionOutdated = !CONFIG_VERSION.equals(
                     loaded.getProperty("config.version", "").trim());
 
@@ -214,6 +217,10 @@ public final class ServerConfigStore {
                 write(writer, properties, "history.recent");
                 write(writer, properties, "history.maxFetch");
                 write(writer, properties, "avatar.maxBytes");
+                writer.write("\n");
+                write(writer, properties, "features.image");
+                write(writer, properties, "features.voice");
+                write(writer, properties, "features.emoji");
                 writer.write("\n");
                 write(writer, properties, "ai.enabled");
                 write(writer, properties, "ai.apiKey");

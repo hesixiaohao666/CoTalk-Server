@@ -24,6 +24,10 @@ public class ServerConfig {
     public final int historyMaxFetch;
     public final int avatarMaxBytes;
 
+    public final boolean featureImage;
+    public final boolean featureVoice;
+    public final boolean featureEmoji;
+
     public final boolean aiEnabled;
     public final String aiApiKey;
     public final String aiModel;
@@ -62,6 +66,13 @@ public class ServerConfig {
         historyRecent = intValue(properties, "history.recent", 50);
         historyMaxFetch = intValue(properties, "history.maxFetch", 200);
         avatarMaxBytes = intValue(properties, "avatar.maxBytes", 204800);
+
+        featureImage = Boolean.parseBoolean(
+                value(properties, "features.image", "true"));
+        featureVoice = Boolean.parseBoolean(
+                value(properties, "features.voice", "true"));
+        featureEmoji = Boolean.parseBoolean(
+                value(properties, "features.emoji", "true"));
 
         aiEnabled = Boolean.parseBoolean(value(properties, "ai.enabled", "false"));
         aiApiKey = value(properties, "ai.apiKey", "");
@@ -109,6 +120,10 @@ public class ServerConfig {
         properties.setProperty("history.maxFetch", "200");
         properties.setProperty("avatar.maxBytes", "204800");
 
+        properties.setProperty("features.image", "true");
+        properties.setProperty("features.voice", "true");
+        properties.setProperty("features.emoji", "true");
+
         properties.setProperty("ai.enabled", "false");
         properties.setProperty("ai.apiKey", "");
         properties.setProperty("ai.model", "deepseek-flash");
@@ -153,6 +168,10 @@ public class ServerConfig {
         properties.setProperty("history.recent", String.valueOf(historyRecent));
         properties.setProperty("history.maxFetch", String.valueOf(historyMaxFetch));
         properties.setProperty("avatar.maxBytes", String.valueOf(avatarMaxBytes));
+
+        properties.setProperty("features.image", String.valueOf(featureImage));
+        properties.setProperty("features.voice", String.valueOf(featureVoice));
+        properties.setProperty("features.emoji", String.valueOf(featureEmoji));
 
         properties.setProperty("ai.enabled", String.valueOf(aiEnabled));
         properties.setProperty("ai.apiKey", aiApiKey);
