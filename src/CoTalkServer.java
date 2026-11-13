@@ -551,9 +551,15 @@ public class CoTalkServer extends JFrame {
             return;
         }
 
+        if (runtime.applyAdminConfig(saved)) {
+            appendLog("管理员认证配置已即时更新，"
+                    + "所有已绑定的客户端管理员已解除。");
+        }
+
         int choice = JOptionPane.showOptionDialog(
                 this,
-                "配置已保存。端口、连接密钥与 AI 配置需要重启服务后生效。\n是否立即重启服务？",
+                "配置已保存。端口、连接密钥与 AI 配置需要重启服务后生效；"
+                        + "管理员密钥已即时生效。\n是否立即重启服务？",
                 "配置已保存",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.QUESTION_MESSAGE,

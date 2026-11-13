@@ -246,6 +246,46 @@ public class ChatServer implements AiReplySink {
         }
     }
 
+    /**
+     * 管理员密钥刷新或管理员模式关闭时，解除所有在线客户端的管理员身份。
+     */
+    public int revokeAllAdmins(String reason) {
+        int revoked = 0;
+        for (Member member : roomService.snapshot()) {
+            if (member.admin) {
+                member.admin = false;
+                revoked++;
+            }
+        }
+        if (revoked > 0) {
+            broadcastMemberList();
+            notifyMembersChanged();
+            broadcastAdminRevoked(reason);
+            events.onLog("已解除 " + revoked
+                    + " 个客户端的管理员绑定"
+                    + (reason == null || reason.isEmpty()
+                    ? "" : "：" + reason));
+        }
+        return revoked;
+    }
+
+    public void broadcastAdminRevoked(String reason) {
+        if (!running) {
+            return;
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("reason",
+                reason == null ? "" : reason);
+        data.addProperty("ts", System.currentTimeMillis());
+        String line = JsonUtil.stringify(
+                Protocol.frame(Protocol.ADMIN_REVOKED, null, data));
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (handler.isJoined()) {
+                handler.sendLine(line);
+            }
+        }
+    }
+
     public void broadcastRoomUpdate() {
         if (!running) {
             return;

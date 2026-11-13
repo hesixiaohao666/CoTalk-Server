@@ -26,6 +26,9 @@ public final class Protocol {
     public static final String ADMIN_AUTH_CHALLENGE = "admin_auth_challenge";
     public static final String ADMIN_AUTH_RESPONSE = "admin_auth_response";
     public static final String ADMIN_AUTH_OK = "admin_auth_ok";
+    public static final String ADMIN_UNBIND = "admin_unbind";
+    public static final String ADMIN_UNBIND_OK = "admin_unbind_ok";
+    public static final String ADMIN_REVOKED = "admin_revoked";
     public static final String ROOM_ADMIN_UPDATE = "room_admin_update";
     public static final String ROOM_UPDATE = "room_update";
     public static final String PING = "ping";

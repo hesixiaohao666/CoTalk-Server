@@ -242,6 +242,9 @@ public class ClientHandler implements Runnable {
             case Protocol.ROOM_ADMIN_UPDATE:
                 handleRoomAdminUpdate(data, reqId);
                 return true;
+            case Protocol.ADMIN_UNBIND:
+                handleAdminUnbind(data, reqId);
+                return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
                         "不支持的请求类型", reqId));
@@ -854,6 +857,26 @@ public class ClientHandler implements Runnable {
         server.notifyMembersChanged();
         server.getEvents().onLog(member.nickname
                 + " 已绑定管理员身份，IP：" + ip);
+    }
+
+    private void handleAdminUnbind(JsonObject data, String reqId) {
+        if (member == null) {
+            send(Protocol.error(Protocol.ERR_NOT_JOINED,
+                    "请先加入房间", reqId));
+            return;
+        }
+        boolean wasAdmin = member.admin;
+        member.admin = false;
+        adminNonce = "";
+        JsonObject ok = new JsonObject();
+        ok.addProperty("admin", false);
+        send(Protocol.frame(Protocol.ADMIN_UNBIND_OK, reqId, ok));
+        if (wasAdmin) {
+            server.broadcastMemberList();
+            server.notifyMembersChanged();
+            server.getEvents().onLog(member.nickname
+                    + " 已解除管理员绑定，IP：" + ip);
+        }
     }
 
     private void handleRoomAdminUpdate(JsonObject data, String reqId) {

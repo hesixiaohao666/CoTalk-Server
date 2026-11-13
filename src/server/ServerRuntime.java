@@ -143,6 +143,36 @@ public final class ServerRuntime {
         return config;
     }
 
+    /**
+     * 保存设置后即时应用管理员认证配置；密钥/开关变化时解除所有管理员绑定。
+     * 其他配置仍需重启服务。
+     */
+    public boolean applyAdminConfig(ServerConfig saved) {
+        if (saved == null) {
+            return false;
+        }
+        boolean changed = config.adminEnabled != saved.adminEnabled
+                || config.adminIterations != saved.adminIterations
+                || differs(config.adminSalt, saved.adminSalt)
+                || differs(config.adminVerifier, saved.adminVerifier);
+        if (!changed) {
+            return false;
+        }
+        config.adminEnabled = saved.adminEnabled;
+        config.adminSalt = saved.adminSalt;
+        config.adminIterations = saved.adminIterations;
+        config.adminVerifier = saved.adminVerifier;
+        events.onLog("管理员认证配置已即时更新");
+        if (chatServer != null) {
+            chatServer.revokeAllAdmins("管理员密钥已刷新");
+        }
+        return true;
+    }
+
+    private static boolean differs(String left, String right) {
+        return left == null ? right != null : !left.equals(right);
+    }
+
     public Room getRoom() {
         return room;
     }

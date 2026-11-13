@@ -6,6 +6,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -39,16 +40,19 @@ public class ServerSettingsDialog extends JDialog {
     private final JPasswordField authKeyField = new JPasswordField(24);
     private final JCheckBox showAuthKey = new JCheckBox("显示");
     private final JButton generateKeyButton = new JButton("生成随机");
+    private final JButton copyKeyButton = new JButton("复制");
 
     private final JCheckBox featureImageCheck = new JCheckBox("启用图片发送");
     private final JCheckBox featureVoiceCheck = new JCheckBox("启用语音发送");
     private final JCheckBox featureEmojiCheck = new JCheckBox("启用表情包发送");
     private final JCheckBox pushEnabledCheck = new JCheckBox("启用后台推送");
 
-    private final JCheckBox adminEnabledCheck = new JCheckBox("启用管理员模式");
+    private final JCheckBox adminEnabledCheck =
+            new JCheckBox("启用管理员模式（实验性功能）");
     private final JPasswordField adminKeyField = new JPasswordField(24);
     private final JCheckBox showAdminKey = new JCheckBox("显示");
     private final JButton generateAdminKeyButton = new JButton("生成随机");
+    private final JButton copyAdminKeyButton = new JButton("复制");
     private final JLabel adminKeyStatusLabel = new JLabel();
 
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
@@ -91,7 +95,9 @@ public class ServerSettingsDialog extends JDialog {
         applyFont(getContentPane(), uiFont(Font.PLAIN, 14));
         styleFields();
         styleButton(generateKeyButton, false);
+        styleButton(copyKeyButton, false);
         styleButton(generateAdminKeyButton, false);
+        styleButton(copyAdminKeyButton, false);
         styleButton(browseAvatarButton, false);
         styleButton(browseRoomAvatarButton, false);
     }
@@ -115,7 +121,7 @@ public class ServerSettingsDialog extends JDialog {
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("通用", buildGeneralPanel());
-        tabs.addTab("管理员", buildAdminPanel());
+        tabs.addTab("管理员（实验性功能）", buildAdminPanel());
         tabs.addTab("AI功能", buildAiPanel());
         tabs.addTab("关于", buildAboutPanel());
         content.add(tabs, BorderLayout.CENTER);
@@ -171,6 +177,7 @@ public class ServerSettingsDialog extends JDialog {
         keyActions.setOpaque(false);
         keyActions.add(showAuthKey);
         keyActions.add(generateKeyButton);
+        keyActions.add(copyKeyButton);
         keyRow.add(keyActions, BorderLayout.EAST);
         addRow(panel, row++, "连接密钥", keyRow, "客户端连接前需要输入");
 
@@ -275,16 +282,20 @@ public class ServerSettingsDialog extends JDialog {
         keyActions.setOpaque(false);
         keyActions.add(showAdminKey);
         keyActions.add(generateAdminKeyButton);
+        keyActions.add(copyAdminKeyButton);
         keyRow.add(keyActions, BorderLayout.EAST);
         addRow(panel, row++, "设置新密钥", keyRow,
                 "留空保留现有密钥");
 
         addNote(panel, row++,
+                "管理员模式为实验性功能，后续实验性功能也会在设置页明确标注。");
+        addNote(panel, row++,
                 "管理员密钥仅保存 PBKDF2 派生 verifier，配置文件不会回显明文。");
         addNote(panel, row++,
                 "生成新密钥后请立即复制保存；保存配置后将不再显示明文。");
         addNote(panel, row++,
-                "启用管理员模式前必须已设置密钥；修改管理员配置后需要重启服务。");
+                "启用管理员模式前必须已设置密钥。保存后管理员开关与密钥即时生效，"
+                        + "并自动解除所有在线客户端的管理员绑定；其他配置仍需重启。");
 
         JScrollPane scroll = new JScrollPane(panel);
         scroll.setBorder(null);
@@ -501,6 +512,8 @@ public class ServerSettingsDialog extends JDialog {
             showAuthKey.setSelected(true);
             setVisible(authKeyField, showAuthKey);
         });
+        copyKeyButton.addActionListener(e -> copyKey(
+                authKeyField, copyKeyButton, "连接密钥"));
         browseAvatarButton.addActionListener(e -> browseAvatar());
         browseRoomAvatarButton.addActionListener(e -> browseRoomAvatar());
         showAdminKey.addActionListener(e -> {
@@ -513,6 +526,36 @@ public class ServerSettingsDialog extends JDialog {
             adminKeyField.setEchoChar((char) 0);
             updateAdminKeyStatus(true);
         });
+        copyAdminKeyButton.addActionListener(e -> copyKey(
+                adminKeyField, copyAdminKeyButton, "管理员密钥"));
+    }
+
+    private void copyKey(JPasswordField field,
+                         JButton button,
+                         String keyName) {
+        String value = password(field);
+        if (value.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    keyName + "为空，无法复制",
+                    "复制" + keyName,
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new StringSelection(value), null);
+            String originalText = "复制";
+            button.setText("已复制");
+            javax.swing.Timer timer = new javax.swing.Timer(1500,
+                    e -> button.setText(originalText));
+            timer.setRepeats(false);
+            timer.start();
+        } catch (RuntimeException e) {
+            JOptionPane.showMessageDialog(this,
+                    "复制失败：" + e.getMessage(),
+                    "复制" + keyName,
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void updateAdminKeyStatus(boolean pendingNewKey) {

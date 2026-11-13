@@ -31,10 +31,10 @@ public class ServerConfig {
     public final boolean pushEnabled;
     public final int reconnectGraceMs;
 
-    public final boolean adminEnabled;
-    public final String adminSalt;
-    public final int adminIterations;
-    public final String adminVerifier;
+    public volatile boolean adminEnabled;
+    public volatile String adminSalt;
+    public volatile int adminIterations;
+    public volatile String adminVerifier;
 
     public final boolean aiProEnabled;
 
