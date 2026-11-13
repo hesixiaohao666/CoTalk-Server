@@ -11,8 +11,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
@@ -58,6 +60,8 @@ public class ServerSettingsDialog extends JDialog {
 
     private final JCheckBox aiProEnabledCheck =
             new JCheckBox("AI群友Pro（实验性功能）");
+    private final List<JComponent> proOnlyAiRows = new ArrayList<>();
+    private final List<JComponent> classicOnlyAiRows = new ArrayList<>();
     private final JTextField aiProContextMessagesField = new JTextField(10);
     private final JTextField aiProPromptMaxCharsField = new JTextField(10);
     private final JTextField aiProMemoryMaxCharsField = new JTextField(10);
@@ -136,7 +140,7 @@ public class ServerSettingsDialog extends JDialog {
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("通用", buildGeneralPanel());
-        tabs.addTab("管理员（实验性功能）", buildAdminPanel());
+        tabs.addTab("管理员", buildAdminPanel());
         tabs.addTab("AI功能", buildAiPanel());
         if (aiProAdminService != null) {
             tabs.addTab("AI Pro管理",
@@ -168,6 +172,18 @@ public class ServerSettingsDialog extends JDialog {
         addRow(panel, row++, "心跳超时", heartbeatTimeoutField, "毫秒，大于 0");
         addRow(panel, row++, "重连宽限", reconnectGraceField,
                 "毫秒，5000–60000");
+
+        JPanel keyRow = new JPanel(new BorderLayout(6, 0));
+        keyRow.setOpaque(false);
+        keyRow.add(authKeyField, BorderLayout.CENTER);
+        JPanel keyActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        keyActions.setOpaque(false);
+        keyActions.add(showAuthKey);
+        keyActions.add(generateKeyButton);
+        keyActions.add(copyKeyButton);
+        keyRow.add(keyActions, BorderLayout.EAST);
+        addRow(panel, row++, "连接密钥", keyRow, "客户端连接前需要输入");
+
         addRow(panel, row++, "房间名称", roomNameField, null);
         addRow(panel, row++, "房间公告", announcementField, null);
 
@@ -188,17 +204,6 @@ public class ServerSettingsDialog extends JDialog {
                 "关闭后客户端不显示本地消息通知");
 
         addRow(panel, row++, "数据库路径", dbPathField, null);
-
-        JPanel keyRow = new JPanel(new BorderLayout(6, 0));
-        keyRow.setOpaque(false);
-        keyRow.add(authKeyField, BorderLayout.CENTER);
-        JPanel keyActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        keyActions.setOpaque(false);
-        keyActions.add(showAuthKey);
-        keyActions.add(generateKeyButton);
-        keyActions.add(copyKeyButton);
-        keyRow.add(keyActions, BorderLayout.EAST);
-        addRow(panel, row++, "连接密钥", keyRow, "客户端连接前需要输入");
 
         JTextField pathField = new JTextField(configPath.toAbsolutePath().toString());
         pathField.setEditable(false);
@@ -222,25 +227,9 @@ public class ServerSettingsDialog extends JDialog {
 
         addRow(form, row++, "AI群友Pro", aiProEnabledCheck,
                 "实验性功能；关闭时回退经典 AI");
-        addRow(form, row++, "Pro 上下文条数", aiProContextMessagesField,
-                "默认 10");
-        addRow(form, row++, "Pro 提示词上限", aiProPromptMaxCharsField,
-                "字符数，默认 6000");
-        addRow(form, row++, "Pro 记忆预算", aiProMemoryMaxCharsField,
-                "字符数，默认 1200");
-        addRow(form, row++, "主人昵称", aiProOwnerNamesField,
-                "逗号分隔，可空");
-        addNote(form, row++,
-                "以上为 Pro 基础参数；经典 AI 与 Pro 共用 API Key、模型、"
-                        + "昵称、触发词等基础配置。修改后需要重启服务。");
 
         addRow(form, row++, "AI 开关", aiEnabledCheck,
                 "关闭或未填写 API Key 时不会出现 AI 成员");
-        addRow(form, row++, "AI 识图", aiVisionCheck,
-                "关闭后只保留图片/表情的文字描述");
-        addRow(form, row++, "读取系统消息", aiSystemMessagesCheck,
-                "加入/退出/撤回/拍一拍/广播等");
-
         JPanel apiRow = new JPanel(new BorderLayout(6, 0));
         apiRow.setOpaque(false);
         apiRow.add(apiKeyField, BorderLayout.CENTER);
@@ -249,14 +238,9 @@ public class ServerSettingsDialog extends JDialog {
         apiActions.add(showApiKey);
         apiRow.add(apiActions, BorderLayout.EAST);
         addRow(form, row++, "API Key", apiRow, "DeepSeek 服务端密钥");
-
         addRow(form, row++, "模型", aiModelField, null);
         addRow(form, row++, "Base URL", aiBaseUrlField, null);
         addRow(form, row++, "AI 昵称", aiNameField, null);
-        addRow(form, row++, "@ 触发词", aiMentionsField, "逗号分隔");
-        addRow(form, row++, "参与关键词", aiKeywordsField, "如：大肥鱼,鱼,AI");
-        addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
-        addRow(form, row++, "随机参与概率", aiRandomChanceField, "0–100");
 
         JPanel avatarRow = new JPanel(new BorderLayout(6, 0));
         avatarRow.setOpaque(false);
@@ -264,34 +248,51 @@ public class ServerSettingsDialog extends JDialog {
         avatarRow.add(browseAvatarButton, BorderLayout.EAST);
         addRow(form, row++, "AI 头像", avatarRow, "PNG/JPG 路径");
 
+        addRow(form, row++, "@ 触发词", aiMentionsField, "逗号分隔");
+        addRow(form, row++, "参与关键词", aiKeywordsField, "如：大肥鱼,鱼,AI");
+        addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
+        addRow(form, row++, "随机参与概率", aiRandomChanceField, "0–100");
+
+        addRow(form, row++, "Pro 上下文条数", aiProContextMessagesField,
+                "默认 10", proOnlyAiRows);
+        addRow(form, row++, "Pro 提示词上限", aiProPromptMaxCharsField,
+                "字符数，默认 6000", proOnlyAiRows);
+        addRow(form, row++, "Pro 记忆预算", aiProMemoryMaxCharsField,
+                "字符数，默认 1200", proOnlyAiRows);
+        addRow(form, row++, "主人昵称", aiProOwnerNamesField,
+                "逗号分隔，可空", proOnlyAiRows);
+
         aiForcedPromptArea.setLineWrap(true);
         aiForcedPromptArea.setWrapStyleWord(true);
         aiForcedPromptArea.setEditable(false);
         aiForcedPromptArea.setBackground(new Color(0xF2F2F2));
         JScrollPane forcedPromptScroll = new JScrollPane(aiForcedPromptArea);
-        forcedPromptScroll.setPreferredSize(new Dimension(420, 100));
+        forcedPromptScroll.setPreferredSize(new Dimension(420, 90));
         addRow(form, row++, "强制提示词", forcedPromptScroll,
-                "由程序固定，不可修改");
+                "由程序固定，不可修改", classicOnlyAiRows);
 
         aiPromptArea.setLineWrap(true);
         aiPromptArea.setWrapStyleWord(true);
         JScrollPane promptScroll = new JScrollPane(aiPromptArea);
-        promptScroll.setPreferredSize(new Dimension(420, 100));
+        promptScroll.setPreferredSize(new Dimension(420, 90));
         addRow(form, row++, "自定义提示词", promptScroll,
-                "用于大肥鱼人设和表达风格");
+                "用于经典 AI 的人设和表达风格", classicOnlyAiRows);
+        addRow(form, row++, "上下文条数", aiMaxContextField,
+                "经典 AI 使用", classicOnlyAiRows);
 
+        addRow(form, row++, "AI 识图", aiVisionCheck,
+                "关闭后只保留图片/表情的文字描述");
+        addRow(form, row++, "读取系统消息", aiSystemMessagesCheck,
+                "加入/退出/撤回/拍一拍/广播等");
         addRow(form, row++, "回复冷却", aiCooldownField, "毫秒");
-        addRow(form, row++, "上下文条数", aiMaxContextField, null);
         addRow(form, row++, "请求超时", aiTimeoutField, "毫秒");
         addRow(form, row++, "maxTokens", aiMaxTokensField, null);
         addRow(form, row++, "单条最大字符", aiMessageMaxCharsField, "默认 30");
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 5，最多 10");
         addRow(form, row++, "多条间隔", aiReplyDelayField, "毫秒，默认 600");
         addNote(form, row,
-                "强制提示词固定包含交流方式、法律道德底线和输出格式；"
-                        + "自定义提示词只补充人设。被 @ 时必须回复，关键词按概率参与，"
-                        + "其他消息按随机概率参与。系统消息只作为上下文，不单独触发回复；"
-                        + "频繁上下线只保留最后一条。修改 AI 配置后需要重启服务。");
+                "被 @ 时必须回复；关键词和随机参与按概率触发。"
+                        + "修改 AI 配置后需要重启服务。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);
@@ -321,7 +322,7 @@ public class ServerSettingsDialog extends JDialog {
                 "留空保留现有密钥");
 
         addNote(panel, row++,
-                "管理员模式为实验性功能，后续实验性功能也会在设置页明确标注。");
+                "管理员模式为实验性功能。");
         addNote(panel, row++,
                 "管理员密钥仅保存 PBKDF2 派生 verifier，配置文件不会回显明文。");
         addNote(panel, row++,
@@ -357,21 +358,19 @@ public class ServerSettingsDialog extends JDialog {
                         + "数据存储：SQLite\n"
                         + "网络通信：TCP Socket (NDJSON)"), null);
         addRow(panel, row++, "更新日志", readOnlyArea(
-                "版本：0.3.3(beta)\n"
-                        + "更新时间：2026-11-10\n"
-                        + "- 新增功能开关：支持在设置中全局开启/关闭图片、语音、表情包的发送\n"
-                        + "- 界面视觉重构：统一界面字体、颜色与边距；修复输入框边框缺失问题\n"
-                        + "- 交互区域优化：广播与撤回区域调整对齐，输入框限制长度，支持回车发送\n"
-                        + "- 设置面板升级：页签重构为“通用/管理员/AI功能/关于”，新增管理员占位与关于页\n"
-                        + "- 修复了一些已知问题\n"
-                        + "- 此次更新兼容 v0.3.1(beta)-v0.3.2(beta) 版本的服务端"), null);
+                "版本：0.3.5(beta)\n"
+                        + "更新时间：2026-11-13\n"
+                        + "- 新增后台推送能力与重连宽限配置\n"
+                        + "- 新增管理员模式、密钥与房间管理接口\n"
+                        + "- 新增 AI 群友 Pro：多层记忆、情绪、待办与表情\n"
+                        + "- 新增 AI Pro 管理面板与 Headless 命令\n"
+                        + "- 此次更新仅兼容 v0.3.5(beta) 版本的客户端"), null);
         addRow(panel, row++, "开发信息", readOnlyArea(
                 "作者：何似小浩\n"
                         + "开源仓库：\n"
                         + "CoTalk 客户端：https://github.com/hesixiaohao666/CoTalk\n"
                         + "CoTalk 服务端：https://github.com/hesixiaohao666/CoTalk-Server"), null);
-        addNote(panel, row,
-                "以上内容为只读信息；版本区间由服务端代码常量控制。");
+        addNote(panel, row, "以上内容为只读信息。");
 
         JScrollPane scroll = new JScrollPane(panel);
         scroll.setBorder(null);
@@ -404,12 +403,23 @@ public class ServerSettingsDialog extends JDialog {
 
     private void addRow(JPanel panel, int row, String label,
                         JComponent field, String hint) {
+        addRow(panel, row, label, field, hint, null);
+    }
+
+    private void addRow(JPanel panel, int row, String label,
+                        JComponent field, String hint,
+                        List<JComponent> group) {
+        JLabel labelView = new JLabel(label);
         GridBagConstraints labelConstraints = new GridBagConstraints();
         labelConstraints.gridx = 0;
         labelConstraints.gridy = row;
         labelConstraints.anchor = GridBagConstraints.WEST;
         labelConstraints.insets = new Insets(0, 0, 10, 12);
-        panel.add(new JLabel(label), labelConstraints);
+        panel.add(labelView, labelConstraints);
+        if (group != null) {
+            group.add(labelView);
+            group.add(field);
+        }
 
         GridBagConstraints fieldConstraints = new GridBagConstraints();
         fieldConstraints.gridx = 1;
@@ -429,10 +439,18 @@ public class ServerSettingsDialog extends JDialog {
             JLabel hintLabel = new JLabel(hint);
             hintLabel.setForeground(new Color(0x777777));
             panel.add(hintLabel, hintConstraints);
+            if (group != null) {
+                group.add(hintLabel);
+            }
         }
     }
 
     private void addNote(JPanel panel, int row, String text) {
+        addNote(panel, row, text, null);
+    }
+
+    private JLabel addNote(JPanel panel, int row, String text,
+                           List<JComponent> group) {
         GridBagConstraints constraints = new GridBagConstraints();
         constraints.gridx = 0;
         constraints.gridy = row;
@@ -443,6 +461,10 @@ public class ServerSettingsDialog extends JDialog {
         JLabel note = new JLabel(text);
         note.setForeground(new Color(0x777777));
         panel.add(note, constraints);
+        if (group != null) {
+            group.add(note);
+        }
+        return note;
     }
 
     private JTextField readOnlyField(String text) {
@@ -515,6 +537,7 @@ public class ServerSettingsDialog extends JDialog {
         updateAdminKeyStatus(false);
 
         aiProEnabledCheck.setSelected(original.aiProEnabled);
+        updateAiModeVisibility();
         aiProContextMessagesField.setText(String.valueOf(original.aiPro.getInt(
                 "ai.pro.prompt.contextMessages")));
         aiProPromptMaxCharsField.setText(String.valueOf(original.aiPro.getInt(
@@ -548,6 +571,7 @@ public class ServerSettingsDialog extends JDialog {
     }
 
     private void bindActions() {
+        aiProEnabledCheck.addActionListener(e -> updateAiModeVisibility());
         showAuthKey.addActionListener(e -> setVisible(authKeyField, showAuthKey));
         showApiKey.addActionListener(e -> setVisible(apiKeyField, showApiKey));
         generateKeyButton.addActionListener(e -> {
@@ -571,6 +595,18 @@ public class ServerSettingsDialog extends JDialog {
         });
         copyAdminKeyButton.addActionListener(e -> copyKey(
                 adminKeyField, copyAdminKeyButton, "管理员密钥"));
+    }
+
+    private void updateAiModeVisibility() {
+        boolean pro = aiProEnabledCheck.isSelected();
+        for (JComponent component : proOnlyAiRows) {
+            component.setVisible(pro);
+        }
+        for (JComponent component : classicOnlyAiRows) {
+            component.setVisible(!pro);
+        }
+        revalidate();
+        repaint();
     }
 
     private void copyKey(JPasswordField field,

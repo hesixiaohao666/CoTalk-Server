@@ -10,7 +10,7 @@ public interface AiReplySink {
     void appendAiMessage(String content) throws Exception;
 
     /**
-     * AI 表情消息。阶段 B 尚未启用，默认视为不支持。
+     * AI 表情消息。默认实现视为不支持，由具体发送端按需覆写。
      */
     default void appendAiEmojiMessage(Attachment attachment, String content)
             throws Exception {

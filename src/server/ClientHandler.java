@@ -34,8 +34,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * 单客户端连接：按行读取 NDJSON，处理 join/leave/ping。
- * 消息、历史、资料、头像在后续 Step 扩展。
+ * 单客户端连接：按行读取 NDJSON，处理鉴权、加入、消息、历史、资料与房间管理。
  */
 public class ClientHandler implements Runnable {
 
@@ -490,6 +489,7 @@ public class ClientHandler implements Runnable {
         serverInfo.addProperty("versionName", ServerVersion.VERSION_NAME);
         serverInfo.addProperty("versionCode", ServerVersion.VERSION_CODE);
         serverInfo.addProperty("aiEnabled", server.isAiActive());
+        serverInfo.addProperty("aiProEnabled", config.aiProEnabled);
         serverInfo.addProperty("aiName", config.aiName);
         serverInfo.addProperty("adminEnabled", config.adminEnabled);
         serverInfo.addProperty("pushEnabled", config.pushEnabled);
