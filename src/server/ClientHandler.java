@@ -473,6 +473,8 @@ public class ClientHandler implements Runnable {
         serverInfo.addProperty("versionCode", ServerVersion.VERSION_CODE);
         serverInfo.addProperty("aiEnabled", server.isAiActive());
         serverInfo.addProperty("aiName", config.aiName);
+        serverInfo.addProperty("adminEnabled", config.adminEnabled);
+        serverInfo.addProperty("pushEnabled", config.pushEnabled);
         JsonObject features = new JsonObject();
         features.addProperty("image", config.featureImage);
         features.addProperty("voice", config.featureVoice);

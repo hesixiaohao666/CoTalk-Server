@@ -22,7 +22,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    private static final String CONFIG_VERSION = "4";
+    private static final String CONFIG_VERSION = "3200";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -88,7 +88,14 @@ public final class ServerConfigStore {
                     || !loaded.containsKey("ai.systemMessages")
                     || !loaded.containsKey("features.image")
                     || !loaded.containsKey("features.voice")
-                    || !loaded.containsKey("features.emoji");
+                    || !loaded.containsKey("features.emoji")
+                    || !loaded.containsKey("push.enabled")
+                    || !loaded.containsKey("server.reconnectGraceMs")
+                    || !loaded.containsKey("admin.enabled")
+                    || !loaded.containsKey("admin.salt")
+                    || !loaded.containsKey("admin.iterations")
+                    || !loaded.containsKey("admin.verifier")
+                    || !loaded.containsKey("ai.pro.enabled");
             configVersionOutdated = !CONFIG_VERSION.equals(
                     loaded.getProperty("config.version", "").trim());
 
@@ -159,6 +166,14 @@ public final class ServerConfigStore {
         if (config.avatarMaxBytes <= 0) {
             throw new IllegalArgumentException("avatar.maxBytes 必须大于 0");
         }
+        if (config.reconnectGraceMs < 5000
+                || config.reconnectGraceMs > 60000) {
+            throw new IllegalArgumentException(
+                    "server.reconnectGraceMs 必须在 5000–60000 之间");
+        }
+        if (config.adminIterations <= 0) {
+            throw new IllegalArgumentException("admin.iterations 必须大于 0");
+        }
         if (config.aiCooldownMs < 0 || config.aiMaxContext <= 0
                 || config.aiTimeoutMs <= 0 || config.aiMaxTokens <= 0) {
             throw new IllegalArgumentException("AI 数值配置非法");
@@ -221,6 +236,16 @@ public final class ServerConfigStore {
                 write(writer, properties, "features.image");
                 write(writer, properties, "features.voice");
                 write(writer, properties, "features.emoji");
+                writer.write("\n");
+                write(writer, properties, "push.enabled");
+                write(writer, properties, "server.reconnectGraceMs");
+                writer.write("\n");
+                write(writer, properties, "admin.enabled");
+                write(writer, properties, "admin.salt");
+                write(writer, properties, "admin.iterations");
+                write(writer, properties, "admin.verifier");
+                writer.write("\n");
+                write(writer, properties, "ai.pro.enabled");
                 writer.write("\n");
                 write(writer, properties, "ai.enabled");
                 write(writer, properties, "ai.apiKey");

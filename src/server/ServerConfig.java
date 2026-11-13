@@ -28,6 +28,16 @@ public class ServerConfig {
     public final boolean featureVoice;
     public final boolean featureEmoji;
 
+    public final boolean pushEnabled;
+    public final int reconnectGraceMs;
+
+    public final boolean adminEnabled;
+    public final String adminSalt;
+    public final int adminIterations;
+    public final String adminVerifier;
+
+    public final boolean aiProEnabled;
+
     public final boolean aiEnabled;
     public final String aiApiKey;
     public final String aiModel;
@@ -73,6 +83,20 @@ public class ServerConfig {
                 value(properties, "features.voice", "true"));
         featureEmoji = Boolean.parseBoolean(
                 value(properties, "features.emoji", "true"));
+
+        pushEnabled = Boolean.parseBoolean(
+                value(properties, "push.enabled", "true"));
+        reconnectGraceMs = intValue(
+                properties, "server.reconnectGraceMs", 15000);
+
+        adminEnabled = Boolean.parseBoolean(
+                value(properties, "admin.enabled", "false"));
+        adminSalt = value(properties, "admin.salt", "");
+        adminIterations = intValue(properties, "admin.iterations", 120000);
+        adminVerifier = value(properties, "admin.verifier", "");
+
+        aiProEnabled = Boolean.parseBoolean(
+                value(properties, "ai.pro.enabled", "false"));
 
         aiEnabled = Boolean.parseBoolean(value(properties, "ai.enabled", "false"));
         aiApiKey = value(properties, "ai.apiKey", "");
@@ -124,6 +148,16 @@ public class ServerConfig {
         properties.setProperty("features.voice", "true");
         properties.setProperty("features.emoji", "true");
 
+        properties.setProperty("push.enabled", "true");
+        properties.setProperty("server.reconnectGraceMs", "15000");
+
+        properties.setProperty("admin.enabled", "false");
+        properties.setProperty("admin.salt", "");
+        properties.setProperty("admin.iterations", "120000");
+        properties.setProperty("admin.verifier", "");
+
+        properties.setProperty("ai.pro.enabled", "false");
+
         properties.setProperty("ai.enabled", "false");
         properties.setProperty("ai.apiKey", "");
         properties.setProperty("ai.model", "deepseek-flash");
@@ -172,6 +206,17 @@ public class ServerConfig {
         properties.setProperty("features.image", String.valueOf(featureImage));
         properties.setProperty("features.voice", String.valueOf(featureVoice));
         properties.setProperty("features.emoji", String.valueOf(featureEmoji));
+
+        properties.setProperty("push.enabled", String.valueOf(pushEnabled));
+        properties.setProperty("server.reconnectGraceMs",
+                String.valueOf(reconnectGraceMs));
+
+        properties.setProperty("admin.enabled", String.valueOf(adminEnabled));
+        properties.setProperty("admin.salt", adminSalt);
+        properties.setProperty("admin.iterations", String.valueOf(adminIterations));
+        properties.setProperty("admin.verifier", adminVerifier);
+
+        properties.setProperty("ai.pro.enabled", String.valueOf(aiProEnabled));
 
         properties.setProperty("ai.enabled", String.valueOf(aiEnabled));
         properties.setProperty("ai.apiKey", aiApiKey);

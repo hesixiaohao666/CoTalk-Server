@@ -20,7 +20,7 @@ public class MessageStore {
             "msg_uuid, seq, sender_id, sender_name, sender_tag, "
                     + "sender_avatar_version, content, msg_type, "
                     + "file_id, file_name, file_mime, file_size, file_expired, "
-                    + "recalled, recall_notice, created_at";
+                    + "recalled, recall_notice, sender_admin, created_at";
 
     private final Database database;
 
@@ -72,8 +72,8 @@ public class MessageStore {
                 "INSERT INTO message(msg_uuid, seq, sender_id, sender_name, "
                         + "sender_tag, sender_avatar_version, content, msg_type, "
                         + "file_id, file_name, file_mime, file_size, "
-                        + "file_expired, created_at) "
-                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        + "file_expired, sender_admin, created_at) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setString(1, message.msgUuid);
             statement.setLong(2, message.seq);
             statement.setString(3, message.senderId);
@@ -87,7 +87,8 @@ public class MessageStore {
             statement.setString(11, message.fileMime);
             statement.setLong(12, message.fileSize);
             statement.setInt(13, message.fileExpired ? 1 : 0);
-            statement.setLong(14, message.createdAt);
+            statement.setInt(14, message.senderAdmin ? 1 : 0);
+            statement.setLong(15, message.createdAt);
             statement.executeUpdate();
         }
     }
@@ -254,6 +255,7 @@ public class MessageStore {
             message.fileExpired = result.getInt("file_expired") != 0;
             message.recalled = result.getInt("recalled") != 0;
             message.recallNotice = result.getString("recall_notice");
+            message.senderAdmin = result.getInt("sender_admin") != 0;
             message.createdAt = result.getLong("created_at");
             messages.add(message);
         }

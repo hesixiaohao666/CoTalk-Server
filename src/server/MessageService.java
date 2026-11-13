@@ -78,6 +78,7 @@ public class MessageService {
         message.senderName = sender.nickname;
         message.senderTag = clientTag;
         message.senderAvatarVersion = sender.avatarVersion;
+        message.senderAdmin = sender.admin;
         message.content = content == null ? "" : content;
         message.type = type == null || type.isEmpty() ? "text" : type;
         message.createdAt = System.currentTimeMillis();

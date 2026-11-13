@@ -7,7 +7,7 @@ import com.google.gson.JsonObject;
  */
 public final class Protocol {
 
-    public static final int VERSION = 3100;
+    public static final int VERSION = 3200;
 
     public static final String HELLO = "hello";
     public static final String AUTH_CHALLENGE = "auth_challenge";
@@ -22,6 +22,12 @@ public final class Protocol {
     public static final String FILE_REQ = "file_req";
     public static final String RECALL_REQ = "recall_req";
     public static final String POKE_REQ = "poke_req";
+    public static final String ADMIN_AUTH_BEGIN = "admin_auth_begin";
+    public static final String ADMIN_AUTH_CHALLENGE = "admin_auth_challenge";
+    public static final String ADMIN_AUTH_RESPONSE = "admin_auth_response";
+    public static final String ADMIN_AUTH_OK = "admin_auth_ok";
+    public static final String ROOM_ADMIN_UPDATE = "room_admin_update";
+    public static final String ROOM_UPDATE = "room_update";
     public static final String PING = "ping";
     public static final String LEAVE = "leave";
 
@@ -53,6 +59,11 @@ public final class Protocol {
     public static final int ERR_RECALL_STATE = 2014;
     public static final int ERR_POKE_TARGET = 2015;
     public static final int ERR_FEATURE_DISABLED = 2016;
+    public static final int ERR_ADMIN_DISABLED = 2017;
+    public static final int ERR_ADMIN_AUTH = 2018;
+    public static final int ERR_ADMIN_FORBIDDEN = 2019;
+    public static final int ERR_ROOM_UPDATE = 2020;
+    public static final int ERR_ADMIN_RATE_LIMIT = 2021;
 
     public static final int ERR_AUTH_FAILED = 3001;
     public static final int ERR_CLIENT_VERSION = 3002;

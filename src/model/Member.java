@@ -6,6 +6,7 @@ public class Member {
     public volatile String nickname;
     public volatile String signature;
     public volatile int avatarVersion;
+    public volatile boolean admin;
     public final boolean ai;
     public final String ip;
     public final long connectedAt;

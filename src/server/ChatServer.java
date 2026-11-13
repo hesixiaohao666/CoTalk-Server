@@ -486,6 +486,7 @@ public class ChatServer implements AiReplySink {
                 member.signature == null ? "" : member.signature);
         json.addProperty("avatarVersion", member.avatarVersion);
         json.addProperty("ai", member.ai);
+        json.addProperty("admin", member.admin);
         return json;
     }
 
@@ -500,6 +501,7 @@ public class ChatServer implements AiReplySink {
         json.addProperty("senderAvatarVersion", message.senderAvatarVersion);
         json.addProperty("content", message.content);
         json.addProperty("type", message.type);
+        json.addProperty("senderAdmin", message.senderAdmin);
         if (message.fileId != null && !message.fileId.isEmpty()) {
             json.addProperty("fileId", message.fileId);
             json.addProperty("fileName",
