@@ -30,13 +30,30 @@ public class DeepSeekHttpClient implements DeepSeekClient {
 
     @Override
     public String chatCompletion(List<AiMessage> messages) throws Exception {
+        return chatCompletion(messages, effectiveMaxTokens(),
+                config.aiThinking);
+    }
+
+    @Override
+    public String chatCompletion(List<AiMessage> messages, int maxTokens)
+            throws Exception {
+        return chatCompletion(messages, maxTokens, config.aiThinking);
+    }
+
+    @Override
+    public String chatCompletion(List<AiMessage> messages,
+                                 int maxTokens,
+                                 boolean thinkingEnabled)
+            throws Exception {
         JsonObject body = new JsonObject();
         body.addProperty("model", effectiveModel());
         body.addProperty("stream", false);
-        body.addProperty("max_tokens", effectiveMaxTokens());
+        body.addProperty("max_tokens", maxTokens > 0
+                ? maxTokens : effectiveMaxTokens());
 
         JsonObject thinking = new JsonObject();
-        thinking.addProperty("type", config.aiThinking ? "enabled" : "disabled");
+        thinking.addProperty("type",
+                thinkingEnabled ? "enabled" : "disabled");
         body.add("thinking", thinking);
 
         JsonObject responseFormat = new JsonObject();

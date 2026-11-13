@@ -43,7 +43,9 @@ public final class AiResponderFactory {
     public static AiResponder createPro(ServerConfig config,
                                         AiReplySink sink,
                                         AiImageResolver imageResolver,
-                                        CoreMemoryStore coreMemoryStore) {
+                                        CoreMemoryStore coreMemoryStore,
+                                        store.Database database,
+                                        server.MessageService messageService) {
         if (!isConfigured(config) || sink == null) {
             return new NoopAiResponder();
         }
@@ -52,7 +54,7 @@ public final class AiResponderFactory {
         }
         return new AiProResponder(
                 config, createDeepSeekClient(config), sink,
-                imageResolver, coreMemoryStore);
+                imageResolver, coreMemoryStore, database, messageService);
     }
 
     public static DeepSeekClient createDeepSeekClient(ServerConfig config) {

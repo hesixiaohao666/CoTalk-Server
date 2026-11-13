@@ -112,7 +112,8 @@ public final class ServerRuntime {
                             config.aiPromptCustom,
                             config.aiPro.ownerNames());
                     responder = AiResponderFactory.createPro(
-                            config, chatServer, imageResolver, coreMemoryStore);
+                            config, chatServer, imageResolver,
+                            coreMemoryStore, database, messageService);
                     events.onLog("AI群友Pro 已启用（实验性功能）");
                 } catch (Exception e) {
                     events.onLog("AI Pro 初始化失败，回退经典 AI："

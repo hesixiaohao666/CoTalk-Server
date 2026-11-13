@@ -8,4 +8,21 @@ import java.util.List;
 public interface DeepSeekClient {
 
     String chatCompletion(List<AiMessage> messages) throws Exception;
+
+    /**
+     * 指定 max_tokens 的调用；默认实现忽略该参数，便于测试桩复用。
+     */
+    default String chatCompletion(List<AiMessage> messages, int maxTokens)
+            throws Exception {
+        return chatCompletion(messages);
+    }
+
+    /**
+     * 指定 max_tokens 与 thinking 的调用；抽取任务强制关闭 thinking。
+     */
+    default String chatCompletion(List<AiMessage> messages,
+                                  int maxTokens,
+                                  boolean thinking) throws Exception {
+        return chatCompletion(messages, maxTokens);
+    }
 }

@@ -5,10 +5,10 @@ package ai.pro;
  */
 public enum MemorySource {
     ADMIN("admin", 1.0),
-    USER_CONFIRMED("user_confirmed", 0.95),
-    USER_STATEMENT("user_statement", 0.85),
-    GROUP_MEMBER("group_member", 0.7),
-    AI_INFERENCE("ai_inference", 0.5);
+    USER_CONFIRMED("user_confirmed", 0.8),
+    USER_STATEMENT("user_statement", 0.6),
+    GROUP_MEMBER("group_member", 0.4),
+    AI_INFERENCE("ai_inference", 0.3);
 
     public final String dbValue;
     public final double trust;

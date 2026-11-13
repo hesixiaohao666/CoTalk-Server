@@ -32,7 +32,7 @@ public class DeepSeekAiResponder implements AiResponder {
     private final AiImageResolver imageResolver;
     private final AiReplyParser replyParser;
     private final List<String> directMentions;
-    private final List<String> keywords;
+    protected final List<String> keywords;
 
     private final Object lock = new Object();
     private final ScheduledExecutorService scheduler =
@@ -309,11 +309,21 @@ public class DeepSeekAiResponder implements AiResponder {
         return Math.max(1, config.aiMaxContext);
     }
 
+    /**
+     * Pro 引擎在系统消息之后、上下文之前插入长期记忆参考。
+     */
+    protected List<AiMessage> buildExtraUserMessages(
+            List<String> mergedMessages,
+            List<Message> context) {
+        return Collections.emptyList();
+    }
+
     private List<AiMessage> buildRequestMessages(List<String> mergedMessages,
                                                  List<Message> context,
                                                  boolean mandatory) {
         List<AiMessage> result = new ArrayList<>();
         result.add(new AiMessage("system", buildSystemPrompt()));
+        result.addAll(buildExtraUserMessages(mergedMessages, context));
 
         int max = contextMessageLimit();
         int start = Math.max(0, context.size() - max);
