@@ -17,6 +17,21 @@ public class RoomStore {
         this.database = database;
     }
 
+    /**
+     * 管理员修改房间名称/公告后写回数据库。
+     */
+    public void update(String name, String announcement) throws Exception {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement update = connection.prepareStatement(
+                    "UPDATE room SET name = ?, announcement = ? WHERE id = 1")) {
+                update.setString(1, name);
+                update.setString(2, announcement);
+                update.executeUpdate();
+            }
+        }
+    }
+
     public Room loadOrCreate(String name, String announcement) throws Exception {
         synchronized (database) {
             Connection connection = database.connection();

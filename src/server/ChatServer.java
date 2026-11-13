@@ -7,14 +7,17 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Member;
 import model.Message;
+import model.Room;
 import protocol.Protocol;
 import store.ConnectionLogStore;
+import store.RoomStore;
 import util.JsonUtil;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
@@ -49,9 +52,12 @@ public class ChatServer implements AiReplySink {
     private final AvatarService avatarService;
     private final AttachmentService attachmentService;
     private final ServerEvents events;
+    private final Object roomUpdateLock = new Object();
     private volatile AiResponder aiResponder = new NoopAiResponder();
     private volatile String roomAvatarId = "";
     private volatile int roomAvatarVersion;
+    private volatile RoomStore roomStore;
+    private volatile Path configPath = ServerConfigStore.DEFAULT_PATH;
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
     private final ExecutorService clientPool = Executors.newCachedThreadPool();
@@ -99,6 +105,166 @@ public class ChatServer implements AiReplySink {
     public void setRoomAvatarInfo(String avatarId, int avatarVersion) {
         this.roomAvatarId = avatarId == null ? "" : avatarId;
         this.roomAvatarVersion = Math.max(0, avatarVersion);
+    }
+
+    public void setRoomStore(RoomStore roomStore) {
+        this.roomStore = roomStore;
+    }
+
+    public void setConfigPath(Path configPath) {
+        this.configPath = configPath == null
+                ? ServerConfigStore.DEFAULT_PATH : configPath;
+    }
+
+    public static final class RoomUpdateResult {
+        public final boolean success;
+        public final int errorCode;
+        public final String message;
+        public final String name;
+        public final String announcement;
+        public final String avatarId;
+        public final int avatarVersion;
+
+        private RoomUpdateResult(boolean success,
+                                 int errorCode,
+                                 String message,
+                                 String name,
+                                 String announcement,
+                                 String avatarId,
+                                 int avatarVersion) {
+            this.success = success;
+            this.errorCode = errorCode;
+            this.message = message;
+            this.name = name;
+            this.announcement = announcement;
+            this.avatarId = avatarId;
+            this.avatarVersion = avatarVersion;
+        }
+
+        static RoomUpdateResult failure(int code, String message) {
+            return new RoomUpdateResult(
+                    false, code, message, "", "", "", 0);
+        }
+    }
+
+    /**
+     * 管理员修改房间名称/公告/头像，持久化后向所有在线客户端广播 room_update。
+     */
+    public RoomUpdateResult updateRoomInfo(Member actor,
+                                           String name,
+                                           String announcement,
+                                           String avatarData) {
+        if (!config.adminEnabled) {
+            return RoomUpdateResult.failure(
+                    Protocol.ERR_ADMIN_DISABLED, "服务端未启用管理员模式");
+        }
+        if (actor == null || !actor.admin) {
+            return RoomUpdateResult.failure(
+                    Protocol.ERR_ADMIN_FORBIDDEN, "仅管理员可以修改房间信息");
+        }
+        String newName = name == null ? "" : name.trim();
+        if (newName.isEmpty() || newName.length() > 32) {
+            return RoomUpdateResult.failure(
+                    Protocol.ERR_INVALID_INPUT, "房间名称需为 1–32 个字符");
+        }
+        String newAnnouncement = announcement == null
+                ? "" : announcement.trim();
+        if (newAnnouncement.length() > 200) {
+            return RoomUpdateResult.failure(
+                    Protocol.ERR_INVALID_INPUT, "房间公告不能超过 200 个字符");
+        }
+        if (roomStore == null) {
+            return RoomUpdateResult.failure(
+                    Protocol.ERR_ROOM_UPDATE, "房间存储尚未初始化");
+        }
+
+        AvatarService.AvatarData avatar = null;
+        if (avatarData != null && !avatarData.trim().isEmpty()) {
+            try {
+                avatar = avatarService.decode(avatarData);
+            } catch (IllegalArgumentException e) {
+                return RoomUpdateResult.failure(
+                        Protocol.ERR_ROOM_UPDATE, e.getMessage());
+            }
+        }
+
+        synchronized (roomUpdateLock) {
+            int newAvatarVersion = roomAvatarVersion;
+            if (avatar != null) {
+                try {
+                    newAvatarVersion = avatarService.save(
+                            RoomAvatarService.ROOM_AVATAR_ID, avatar);
+                } catch (Exception e) {
+                    events.onLog("保存房间头像失败：" + e.getMessage());
+                    return RoomUpdateResult.failure(
+                            Protocol.ERR_ROOM_UPDATE, "房间头像保存失败");
+                }
+            }
+
+            try {
+                roomStore.update(newName, newAnnouncement);
+            } catch (Exception e) {
+                events.onLog("写入房间信息失败：" + e.getMessage());
+                return RoomUpdateResult.failure(
+                        Protocol.ERR_ROOM_UPDATE, "房间信息保存失败");
+            }
+
+            String oldName = config.roomName;
+            String oldAnnouncement = config.roomAnnouncement;
+            config.roomName = newName;
+            config.roomAnnouncement = newAnnouncement;
+            try {
+                ServerConfigStore.save(config, configPath);
+            } catch (Exception e) {
+                config.roomName = oldName;
+                config.roomAnnouncement = oldAnnouncement;
+                try {
+                    roomStore.update(oldName, oldAnnouncement);
+                } catch (Exception ignored) {
+                    // 回滚失败时保留数据库最新值
+                }
+                events.onLog("写入房间配置失败：" + e.getMessage());
+                return RoomUpdateResult.failure(
+                        Protocol.ERR_ROOM_UPDATE, "房间配置保存失败");
+            }
+
+            Room room = roomService.getRoom();
+            room.name = newName;
+            room.announcement = newAnnouncement;
+            if (avatar != null) {
+                roomAvatarId = RoomAvatarService.ROOM_AVATAR_ID;
+                roomAvatarVersion = newAvatarVersion;
+            }
+
+            broadcastRoomUpdate();
+            events.onLog((actor.nickname == null ? "管理员" : actor.nickname)
+                    + " 更新了房间信息");
+            return new RoomUpdateResult(
+                    true, 0, "",
+                    newName, newAnnouncement,
+                    roomAvatarId, roomAvatarVersion);
+        }
+    }
+
+    public void broadcastRoomUpdate() {
+        if (!running) {
+            return;
+        }
+        Room room = roomService.getRoom();
+        JsonObject data = new JsonObject();
+        data.addProperty("name",
+                room.name == null ? "" : room.name);
+        data.addProperty("announcement",
+                room.announcement == null ? "" : room.announcement);
+        data.addProperty("avatarId", roomAvatarId);
+        data.addProperty("avatarVersion", roomAvatarVersion);
+        String line = JsonUtil.stringify(
+                Protocol.frame(Protocol.ROOM_UPDATE, null, data));
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (handler.isJoined()) {
+                handler.sendLine(line);
+            }
+        }
     }
 
     public String getRoomAvatarId() {

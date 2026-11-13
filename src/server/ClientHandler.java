@@ -239,6 +239,9 @@ public class ClientHandler implements Runnable {
             case Protocol.ADMIN_AUTH_RESPONSE:
                 handleAdminAuthResponse(data, reqId);
                 return true;
+            case Protocol.ROOM_ADMIN_UPDATE:
+                handleRoomAdminUpdate(data, reqId);
+                return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
                         "不支持的请求类型", reqId));
@@ -851,6 +854,28 @@ public class ClientHandler implements Runnable {
         server.notifyMembersChanged();
         server.getEvents().onLog(member.nickname
                 + " 已绑定管理员身份，IP：" + ip);
+    }
+
+    private void handleRoomAdminUpdate(JsonObject data, String reqId) {
+        if (!config.adminEnabled) {
+            send(Protocol.error(Protocol.ERR_ADMIN_DISABLED,
+                    "服务端未启用管理员模式", reqId));
+            return;
+        }
+        if (member == null || !member.admin) {
+            send(Protocol.error(Protocol.ERR_ADMIN_FORBIDDEN,
+                    "仅管理员可以修改房间信息", reqId));
+            return;
+        }
+        ChatServer.RoomUpdateResult result = server.updateRoomInfo(
+                member,
+                optString(data, "name", ""),
+                optString(data, "announcement", ""),
+                optString(data, "avatar", "")
+        );
+        if (!result.success) {
+            send(Protocol.error(result.errorCode, result.message, reqId));
+        }
     }
 
     private void handleRecallRequest(JsonObject data, String reqId) {

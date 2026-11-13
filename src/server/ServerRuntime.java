@@ -26,6 +26,7 @@ public final class ServerRuntime {
 
     private final ServerConfig config;
     private final ServerEvents events;
+    private final Path configPath;
 
     private Database database;
     private Room room;
@@ -34,8 +35,16 @@ public final class ServerRuntime {
     private AttachmentService attachmentService;
 
     public ServerRuntime(ServerConfig config, ServerEvents events) {
+        this(config, events, ServerConfigStore.DEFAULT_PATH);
+    }
+
+    public ServerRuntime(ServerConfig config,
+                         ServerEvents events,
+                         Path configPath) {
         this.config = config;
         this.events = events;
+        this.configPath = configPath == null
+                ? ServerConfigStore.DEFAULT_PATH : configPath;
     }
 
     public synchronized void start() throws Exception {
@@ -46,7 +55,8 @@ public final class ServerRuntime {
         database = new Database(config.dbPath);
         database.open();
         try {
-            room = new RoomStore(database).loadOrCreate(
+            RoomStore roomStore = new RoomStore(database);
+            room = roomStore.loadOrCreate(
                     config.roomName, config.roomAnnouncement);
             ConnectionLogStore logStore = new ConnectionLogStore(database);
             MessageStore messageStore = new MessageStore(database);
@@ -66,6 +76,8 @@ public final class ServerRuntime {
             chatServer = new ChatServer(
                     config, roomService, logStore, messageService,
                     avatarService, attachmentService, events);
+            chatServer.setRoomStore(roomStore);
+            chatServer.setConfigPath(configPath);
 
             Member aiMember = AiMemberService.prepare(
                     config, avatarService, events);

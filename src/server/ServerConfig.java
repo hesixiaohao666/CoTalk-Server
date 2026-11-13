@@ -16,8 +16,8 @@ public class ServerConfig {
 
     public final String authKey;
 
-    public final String roomName;
-    public final String roomAnnouncement;
+    public volatile String roomName;
+    public volatile String roomAnnouncement;
     public final String roomAvatar;
     public final String dbPath;
     public final int historyRecent;

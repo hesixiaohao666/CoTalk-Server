@@ -2,8 +2,8 @@ package model;
 
 public class Room {
 
-    public final String name;
-    public final String announcement;
+    public volatile String name;
+    public volatile String announcement;
     public final long createdAt;
 
     public Room(String name, String announcement, long createdAt) {
