@@ -1,6 +1,7 @@
 package server;
 
 import ai.AiPrompts;
+import ai.pro.AiProConfig;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -95,7 +96,7 @@ public final class ServerConfigStore {
                     || !loaded.containsKey("admin.salt")
                     || !loaded.containsKey("admin.iterations")
                     || !loaded.containsKey("admin.verifier")
-                    || !loaded.containsKey("ai.pro.enabled");
+                    || !AiProConfig.missingKeys(loaded).isEmpty();
             configVersionOutdated = !CONFIG_VERSION.equals(
                     loaded.getProperty("config.version", "").trim());
 
@@ -174,6 +175,10 @@ public final class ServerConfigStore {
         if (config.adminIterations <= 0) {
             throw new IllegalArgumentException("admin.iterations 必须大于 0");
         }
+        if (config.aiPro == null) {
+            throw new IllegalArgumentException("ai.pro 配置缺失");
+        }
+        config.aiPro.validate();
         if (config.adminEnabled && (config.adminSalt.isEmpty()
                 || config.adminVerifier.isEmpty())) {
             throw new IllegalArgumentException(
@@ -274,7 +279,9 @@ public final class ServerConfigStore {
                 write(writer, properties, "admin.iterations");
                 write(writer, properties, "admin.verifier");
                 writer.write("\n");
-                write(writer, properties, "ai.pro.enabled");
+                for (String key : AiProConfig.keys()) {
+                    write(writer, properties, key);
+                }
                 writer.write("\n");
                 write(writer, properties, "ai.enabled");
                 write(writer, properties, "ai.apiKey");

@@ -1,6 +1,7 @@
 package server;
 
 import ai.AiPrompts;
+import ai.pro.AiProConfig;
 
 import java.util.Properties;
 
@@ -37,6 +38,7 @@ public class ServerConfig {
     public volatile String adminVerifier;
 
     public final boolean aiProEnabled;
+    public final AiProConfig aiPro;
 
     public final boolean aiEnabled;
     public final String aiApiKey;
@@ -95,8 +97,8 @@ public class ServerConfig {
         adminIterations = intValue(properties, "admin.iterations", 120000);
         adminVerifier = value(properties, "admin.verifier", "");
 
-        aiProEnabled = Boolean.parseBoolean(
-                value(properties, "ai.pro.enabled", "false"));
+        aiPro = new AiProConfig(properties);
+        aiProEnabled = aiPro.enabled();
 
         aiEnabled = Boolean.parseBoolean(value(properties, "ai.enabled", "false"));
         aiApiKey = value(properties, "ai.apiKey", "");
@@ -156,7 +158,7 @@ public class ServerConfig {
         properties.setProperty("admin.iterations", "120000");
         properties.setProperty("admin.verifier", "");
 
-        properties.setProperty("ai.pro.enabled", "false");
+        properties.putAll(AiProConfig.defaultProperties());
 
         properties.setProperty("ai.enabled", "false");
         properties.setProperty("ai.apiKey", "");
@@ -216,7 +218,7 @@ public class ServerConfig {
         properties.setProperty("admin.iterations", String.valueOf(adminIterations));
         properties.setProperty("admin.verifier", adminVerifier);
 
-        properties.setProperty("ai.pro.enabled", String.valueOf(aiProEnabled));
+        properties.putAll(aiPro.toProperties());
 
         properties.setProperty("ai.enabled", String.valueOf(aiEnabled));
         properties.setProperty("ai.apiKey", aiApiKey);

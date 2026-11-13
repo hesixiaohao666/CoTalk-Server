@@ -55,6 +55,12 @@ public class ServerSettingsDialog extends JDialog {
     private final JButton copyAdminKeyButton = new JButton("复制");
     private final JLabel adminKeyStatusLabel = new JLabel();
 
+    private final JCheckBox aiProEnabledCheck =
+            new JCheckBox("AI群友Pro（实验性功能）");
+    private final JTextField aiProContextMessagesField = new JTextField(10);
+    private final JTextField aiProPromptMaxCharsField = new JTextField(10);
+    private final JTextField aiProMemoryMaxCharsField = new JTextField(10);
+    private final JTextField aiProOwnerNamesField = new JTextField(24);
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
     private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
     private final JCheckBox aiSystemMessagesCheck = new JCheckBox("允许 AI 读取系统消息");
@@ -200,6 +206,20 @@ public class ServerSettingsDialog extends JDialog {
     private JPanel buildAiPanel() {
         JPanel form = formPanel();
         int row = 0;
+
+        addRow(form, row++, "AI群友Pro", aiProEnabledCheck,
+                "实验性功能；关闭时回退经典 AI");
+        addRow(form, row++, "Pro 上下文条数", aiProContextMessagesField,
+                "默认 10");
+        addRow(form, row++, "Pro 提示词上限", aiProPromptMaxCharsField,
+                "字符数，默认 6000");
+        addRow(form, row++, "Pro 记忆预算", aiProMemoryMaxCharsField,
+                "字符数，默认 1200");
+        addRow(form, row++, "主人昵称", aiProOwnerNamesField,
+                "逗号分隔，可空");
+        addNote(form, row++,
+                "以上为 Pro 基础参数；经典 AI 与 Pro 共用 API Key、模型、"
+                        + "昵称、触发词等基础配置。修改后需要重启服务。");
 
         addRow(form, row++, "AI 开关", aiEnabledCheck,
                 "关闭或未填写 API Key 时不会出现 AI 成员");
@@ -426,6 +446,8 @@ public class ServerSettingsDialog extends JDialog {
                 roomNameField, announcementField,
                 roomAvatarField, dbPathField, authKeyField,
                 adminKeyField,
+                aiProContextMessagesField, aiProPromptMaxCharsField,
+                aiProMemoryMaxCharsField, aiProOwnerNamesField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
                 aiMentionsField, aiKeywordsField, aiKeywordChanceField,
                 aiRandomChanceField, aiAvatarField, aiCooldownField,
@@ -479,6 +501,14 @@ public class ServerSettingsDialog extends JDialog {
         adminKeyField.setText("");
         updateAdminKeyStatus(false);
 
+        aiProEnabledCheck.setSelected(original.aiProEnabled);
+        aiProContextMessagesField.setText(String.valueOf(original.aiPro.getInt(
+                "ai.pro.prompt.contextMessages")));
+        aiProPromptMaxCharsField.setText(String.valueOf(original.aiPro.getInt(
+                "ai.pro.prompt.maxChars")));
+        aiProMemoryMaxCharsField.setText(String.valueOf(original.aiPro.getInt(
+                "ai.pro.prompt.maxMemoryChars")));
+        aiProOwnerNamesField.setText(original.aiPro.ownerNames());
         aiEnabledCheck.setSelected(original.aiEnabled);
         aiVisionCheck.setSelected(original.aiVision);
         aiSystemMessagesCheck.setSelected(original.aiSystemMessages);
@@ -688,6 +718,20 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("admin.iterations",
                 String.valueOf(adminIterations));
         properties.setProperty("admin.verifier", adminVerifier);
+
+        properties.setProperty("ai.pro.enabled",
+                String.valueOf(aiProEnabledCheck.isSelected()));
+        properties.setProperty("ai.pro.prompt.contextMessages",
+                String.valueOf(readInt(aiProContextMessagesField,
+                        "Pro 上下文条数")));
+        properties.setProperty("ai.pro.prompt.maxChars",
+                String.valueOf(readInt(aiProPromptMaxCharsField,
+                        "Pro 提示词上限")));
+        properties.setProperty("ai.pro.prompt.maxMemoryChars",
+                String.valueOf(readInt(aiProMemoryMaxCharsField,
+                        "Pro 记忆预算")));
+        properties.setProperty("ai.pro.owner.names",
+                text(aiProOwnerNamesField));
 
         properties.setProperty("ai.enabled",
                 String.valueOf(aiEnabledCheck.isSelected()));

@@ -1,5 +1,7 @@
 package ai;
 
+import ai.pro.AiProResponder;
+import ai.pro.CoreMemoryStore;
 import server.ServerConfig;
 
 /**
@@ -33,6 +35,24 @@ public final class AiResponderFactory {
         }
         return new DeepSeekAiResponder(
                 config, createDeepSeekClient(config), sink, imageResolver);
+    }
+
+    /**
+     * AI Pro 引擎。调用方需先完成 CoreMemoryStore.initialize。
+     */
+    public static AiResponder createPro(ServerConfig config,
+                                        AiReplySink sink,
+                                        AiImageResolver imageResolver,
+                                        CoreMemoryStore coreMemoryStore) {
+        if (!isConfigured(config) || sink == null) {
+            return new NoopAiResponder();
+        }
+        if (coreMemoryStore == null) {
+            throw new IllegalArgumentException("AI Pro 核心记忆未初始化");
+        }
+        return new AiProResponder(
+                config, createDeepSeekClient(config), sink,
+                imageResolver, coreMemoryStore);
     }
 
     public static DeepSeekClient createDeepSeekClient(ServerConfig config) {

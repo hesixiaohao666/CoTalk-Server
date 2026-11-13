@@ -8,6 +8,14 @@ public interface AiReplySink {
     void appendAiMessage(String content) throws Exception;
 
     /**
+     * AI 表情消息。阶段 B 尚未启用，默认视为不支持。
+     */
+    default void appendAiEmojiMessage(String fileId, String content)
+            throws Exception {
+        throw new UnsupportedOperationException("当前 AI 引擎不支持表情消息");
+    }
+
+    /**
      * 用户可见的失败提示（持久化 system 消息）。
      */
     void reportFailure(String message);

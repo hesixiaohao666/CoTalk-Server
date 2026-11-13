@@ -1,13 +1,8 @@
 package ai;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import model.Member;
 import model.Message;
 import server.ServerConfig;
-import util.JsonUtil;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,10 +26,11 @@ public class DeepSeekAiResponder implements AiResponder {
     private static final String MANDATORY_FALLBACK = "这个我暂时不能回答，换个话题吧。";
     private static final int MAX_VISION_IMAGES = 2;
 
-    private final ServerConfig config;
+    protected final ServerConfig config;
     private final DeepSeekClient client;
-    private final AiReplySink sink;
+    protected final AiReplySink sink;
     private final AiImageResolver imageResolver;
+    private final AiReplyParser replyParser;
     private final List<String> directMentions;
     private final List<String> keywords;
 
@@ -72,6 +68,8 @@ public class DeepSeekAiResponder implements AiResponder {
         this.client = client;
         this.sink = sink;
         this.imageResolver = imageResolver;
+        this.replyParser = new AiReplyParser(
+                config.aiMaxMessages, config.aiMessageMaxChars);
         List<String> configuredMentions = splitMentions(config.aiMentions);
         this.directMentions = directMentions(configuredMentions);
         this.keywords = keywords(
@@ -189,13 +187,13 @@ public class DeepSeekAiResponder implements AiResponder {
                 activeRequest = withoutImages(activeRequest);
                 raw = client.chatCompletion(activeRequest);
             }
-            ParsedReply reply;
+            AiReplyParser.ParsedReply reply;
             try {
-                reply = parseReply(raw);
+                reply = replyParser.parse(raw);
             } catch (IllegalArgumentException firstError) {
                 sink.reportError("AI 响应无效，重试一次：" + firstError.getMessage());
                 raw = client.chatCompletion(buildRetryMessages(activeRequest));
-                reply = parseReply(raw);
+                reply = replyParser.parse(raw);
             }
             if (reply == null || !reply.send || reply.messages.isEmpty()) {
                 if (mandatory) {
@@ -291,19 +289,33 @@ public class DeepSeekAiResponder implements AiResponder {
         return result;
     }
 
-    private List<AiMessage> buildRequestMessages(List<String> mergedMessages,
-                                                 List<Message> context,
-                                                 boolean mandatory) {
-        List<AiMessage> result = new ArrayList<>();
-        result.add(new AiMessage("system", AiPrompts.buildSystemPrompt(
+    /**
+     * Pro 引擎通过覆写该方法替换核心记忆/红线提示词。
+     */
+    protected String buildSystemPrompt() {
+        return AiPrompts.buildSystemPrompt(
                 config.aiPromptCustom,
                 config.aiMessageMaxChars,
                 config.aiMaxMessages,
                 "回复规则：被 @ 时必须回复至少一条；被关键词或随机触发时"
                         + "可自主判断，只有确实有必要参与时才回复，否则 send=false；"
-                        + "遇到违法违规或违背道德的内容必须拒绝。")));
+                        + "遇到违法违规或违背道德的内容必须拒绝。");
+    }
 
-        int max = Math.max(1, config.aiMaxContext);
+    /**
+     * Pro 引擎可以单独配置回复上下文条数。
+     */
+    protected int contextMessageLimit() {
+        return Math.max(1, config.aiMaxContext);
+    }
+
+    private List<AiMessage> buildRequestMessages(List<String> mergedMessages,
+                                                 List<Message> context,
+                                                 boolean mandatory) {
+        List<AiMessage> result = new ArrayList<>();
+        result.add(new AiMessage("system", buildSystemPrompt()));
+
+        int max = contextMessageLimit();
         int start = Math.max(0, context.size() - max);
         Set<String> selectedImageIds = config.aiVision
                 ? selectRecentImageIds(context, start)
@@ -419,146 +431,6 @@ public class DeepSeekAiResponder implements AiResponder {
                 || content.contains("离开了群聊");
     }
 
-    private ParsedReply parseReply(String raw) {
-        if (raw == null || raw.trim().isEmpty()) {
-            throw new IllegalArgumentException("空响应");
-        }
-        String json = stripCodeFence(raw.trim());
-
-        JsonObject object = JsonUtil.parseObject(json);
-        if (object != null) {
-            List<String> messages = normalizeMessages(object.get("messages"));
-            boolean hasSend = object.has("send")
-                    && object.get("send").isJsonPrimitive();
-            boolean send;
-            if (hasSend) {
-                try {
-                    send = object.get("send").getAsBoolean();
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("send 不是布尔值");
-                }
-            } else if (object.has("messages")) {
-                // 模型偶尔省略 send：有短消息即视为要发送。
-                send = !messages.isEmpty();
-            } else {
-                String single = firstString(object,
-                        "content", "reply", "message", "text");
-                if (single != null) {
-                    send = true;
-                    messages = new ArrayList<>();
-                    addMessage(messages, single);
-                } else {
-                    throw new IllegalArgumentException("缺少 send/messages");
-                }
-            }
-
-            if (send && messages.isEmpty()) {
-                String single = firstString(object,
-                        "content", "reply", "message", "text");
-                if (single != null) {
-                    addMessage(messages, single);
-                }
-            }
-            return new ParsedReply(send, messages);
-        }
-
-        JsonElement element = parseElement(json);
-        if (element != null && element.isJsonArray()) {
-            List<String> messages = normalizeMessages(element);
-            return new ParsedReply(!messages.isEmpty(), messages);
-        }
-        if (element != null && element.isJsonPrimitive()
-                && element.getAsJsonPrimitive().isString()) {
-            List<String> messages = new ArrayList<>();
-            addMessage(messages, element.getAsString());
-            return new ParsedReply(!messages.isEmpty(), messages);
-        }
-
-        // JSON 模式未生效时的兜底：纯文本作为一条短消息发送。
-        if (!looksLikeJson(json)) {
-            List<String> messages = new ArrayList<>();
-            addMessage(messages, json);
-            return new ParsedReply(!messages.isEmpty(), messages);
-        }
-        throw new IllegalArgumentException("响应不是JSON对象");
-    }
-
-    private static String stripCodeFence(String value) {
-        if (!value.startsWith("```")) {
-            return value;
-        }
-        int firstLine = value.indexOf('\n');
-        int lastFence = value.lastIndexOf("```");
-        if (firstLine > 0 && lastFence > firstLine) {
-            return value.substring(firstLine + 1, lastFence).trim();
-        }
-        return value;
-    }
-
-    private List<String> normalizeMessages(JsonElement element) {
-        List<String> messages = new ArrayList<>();
-        if (element == null || element.isJsonNull()) {
-            return messages;
-        }
-        if (element.isJsonArray()) {
-            JsonArray array = element.getAsJsonArray();
-            for (int i = 0; i < array.size(); i++) {
-                JsonElement item = array.get(i);
-                if (item.isJsonPrimitive()
-                        && item.getAsJsonPrimitive().isString()) {
-                    addMessage(messages, item.getAsString());
-                }
-                if (messages.size() >= config.aiMaxMessages) {
-                    break;
-                }
-            }
-        } else if (element.isJsonPrimitive()
-                && element.getAsJsonPrimitive().isString()) {
-            addMessage(messages, element.getAsString());
-        }
-        return messages;
-    }
-
-    private void addMessage(List<String> messages, String value) {
-        if (messages.size() >= config.aiMaxMessages) {
-            return;
-        }
-        String normalized = value == null ? "" : value
-                .replace('\r', ' ')
-                .replace('\n', ' ')
-                .trim();
-        if (normalized.isEmpty()) {
-            return;
-        }
-        messages.add(truncate(normalized, config.aiMessageMaxChars));
-    }
-
-    private static String firstString(JsonObject object, String... keys) {
-        for (String key : keys) {
-            if (object.has(key) && object.get(key).isJsonPrimitive()
-                    && object.get(key).getAsJsonPrimitive().isString()) {
-                return object.get(key).getAsString();
-            }
-        }
-        return null;
-    }
-
-    private static JsonElement parseElement(String json) {
-        try {
-            return JsonParser.parseString(json);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static boolean looksLikeJson(String value) {
-        if (value.isEmpty()) {
-            return false;
-        }
-        char first = value.charAt(0);
-        return first == '{' || first == '[';
-    }
-
     private static boolean containsAny(String content, List<String> keywords) {
         if (content == null || content.isEmpty() || keywords.isEmpty()) {
             return false;
@@ -631,24 +503,4 @@ public class DeepSeekAiResponder implements AiResponder {
         return result;
     }
 
-    private static String truncate(String value, int maxChars) {
-        if (maxChars <= 0) {
-            return "";
-        }
-        if (value.codePointCount(0, value.length()) <= maxChars) {
-            return value;
-        }
-        int end = value.offsetByCodePoints(0, maxChars);
-        return value.substring(0, end);
-    }
-
-    private static final class ParsedReply {
-        final boolean send;
-        final List<String> messages;
-
-        ParsedReply(boolean send, List<String> messages) {
-            this.send = send;
-            this.messages = messages;
-        }
-    }
 }

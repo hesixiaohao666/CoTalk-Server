@@ -1,7 +1,10 @@
 package server;
 
 import ai.AiImagePart;
+import ai.AiImageResolver;
+import ai.AiResponder;
 import ai.AiResponderFactory;
+import ai.pro.CoreMemoryStore;
 import model.Member;
 import model.Room;
 import protocol.Protocol;
@@ -88,19 +91,40 @@ public final class ServerRuntime {
                     config, avatarService, events);
             chatServer.setRoomAvatarInfo(
                     RoomAvatarService.ROOM_AVATAR_ID, roomAvatarVersion);
-            chatServer.setAiResponder(
-                    AiResponderFactory.create(config, chatServer, fileId -> {
-                        AttachmentService.FileData file =
-                                attachmentService.load(fileId);
-                        if (file == null || file.expired
-                                || file.bytes == null) {
-                            return null;
-                        }
-                        return new AiImagePart(
-                                file.attachment.mime,
-                                Base64.getEncoder()
-                                        .encodeToString(file.bytes));
-                    }));
+            AiImageResolver imageResolver = fileId -> {
+                AttachmentService.FileData file =
+                        attachmentService.load(fileId);
+                if (file == null || file.expired
+                        || file.bytes == null) {
+                    return null;
+                }
+                return new AiImagePart(
+                        file.attachment.mime,
+                        Base64.getEncoder().encodeToString(file.bytes));
+            };
+            AiResponder responder;
+            if (config.aiProEnabled) {
+                try {
+                    CoreMemoryStore coreMemoryStore =
+                            new CoreMemoryStore(database);
+                    coreMemoryStore.initialize(
+                            config.aiName,
+                            config.aiPromptCustom,
+                            config.aiPro.ownerNames());
+                    responder = AiResponderFactory.createPro(
+                            config, chatServer, imageResolver, coreMemoryStore);
+                    events.onLog("AI群友Pro 已启用（实验性功能）");
+                } catch (Exception e) {
+                    events.onLog("AI Pro 初始化失败，回退经典 AI："
+                            + e.getMessage());
+                    responder = AiResponderFactory.create(
+                            config, chatServer, imageResolver);
+                }
+            } else {
+                responder = AiResponderFactory.create(
+                        config, chatServer, imageResolver);
+            }
+            chatServer.setAiResponder(responder);
             chatServer.start();
             attachmentService.startMaintenance();
         } catch (Exception e) {

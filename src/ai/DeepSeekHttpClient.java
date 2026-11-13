@@ -24,16 +24,16 @@ public class DeepSeekHttpClient implements DeepSeekClient {
     public DeepSeekHttpClient(ServerConfig config) {
         this.config = config;
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(config.aiTimeoutMs))
+                .connectTimeout(Duration.ofMillis(effectiveTimeoutMs()))
                 .build();
     }
 
     @Override
     public String chatCompletion(List<AiMessage> messages) throws Exception {
         JsonObject body = new JsonObject();
-        body.addProperty("model", config.aiModel);
+        body.addProperty("model", effectiveModel());
         body.addProperty("stream", false);
-        body.addProperty("max_tokens", config.aiMaxTokens);
+        body.addProperty("max_tokens", effectiveMaxTokens());
 
         JsonObject thinking = new JsonObject();
         thinking.addProperty("type", config.aiThinking ? "enabled" : "disabled");
@@ -74,7 +74,7 @@ public class DeepSeekHttpClient implements DeepSeekClient {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(config.aiBaseUrl))
-                .timeout(Duration.ofMillis(config.aiTimeoutMs))
+                .timeout(Duration.ofMillis(effectiveTimeoutMs()))
                 .header("Content-Type", "application/json; charset=utf-8")
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + config.aiApiKey)
@@ -112,5 +112,35 @@ public class DeepSeekHttpClient implements DeepSeekClient {
         }
         // 只读取最终 content；reasoning_content 即使返回也直接忽略。
         return message.get("content").getAsString();
+    }
+
+    private String effectiveModel() {
+        if (config.aiProEnabled) {
+            String model = config.aiPro.model();
+            if (model != null && !model.trim().isEmpty()) {
+                return model.trim();
+            }
+        }
+        return config.aiModel;
+    }
+
+    private int effectiveMaxTokens() {
+        if (config.aiProEnabled) {
+            int tokens = config.aiPro.getInt("ai.pro.maxTokens");
+            if (tokens > 0) {
+                return tokens;
+            }
+        }
+        return config.aiMaxTokens;
+    }
+
+    private int effectiveTimeoutMs() {
+        if (config.aiProEnabled) {
+            int timeout = config.aiPro.getInt("ai.pro.timeoutMs");
+            if (timeout > 0) {
+                return timeout;
+            }
+        }
+        return config.aiTimeoutMs;
     }
 }
