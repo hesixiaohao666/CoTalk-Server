@@ -35,6 +35,7 @@ public final class ServerRuntime {
     private Room room;
     private RoomService roomService;
     private ChatServer chatServer;
+    private AiResponder aiResponder;
     private AttachmentService attachmentService;
 
     public ServerRuntime(ServerConfig config, ServerEvents events) {
@@ -125,6 +126,7 @@ public final class ServerRuntime {
                 responder = AiResponderFactory.create(
                         config, chatServer, imageResolver);
             }
+            aiResponder = responder;
             chatServer.setAiResponder(responder);
             chatServer.start();
             attachmentService.startMaintenance();
@@ -150,6 +152,7 @@ public final class ServerRuntime {
             chatServer.stop();
             chatServer = null;
         }
+        aiResponder = null;
         if (attachmentService != null) {
             attachmentService.shutdownMaintenance();
             attachmentService = null;
@@ -225,6 +228,14 @@ public final class ServerRuntime {
                     Protocol.ERR_INTERNAL, "服务未启动");
         }
         return chatServer.forceRecallBySeq(seq);
+    }
+
+    public String getAiProEmotionStatus() {
+        if (aiResponder instanceof ai.pro.AiProResponder) {
+            return ((ai.pro.AiProResponder) aiResponder)
+                    .getEmotionStatus();
+        }
+        return "未启用";
     }
 
     public String getAiStatus() {

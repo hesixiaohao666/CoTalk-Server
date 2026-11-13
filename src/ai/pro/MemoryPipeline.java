@@ -22,6 +22,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 轮次记忆写入：读取消息窗口 → 抽取 → 过滤 → 去重/合并 → 计分 → 写缓存。
@@ -35,6 +37,8 @@ public class MemoryPipeline {
     private final MemoryStore store;
     private final MemoryIndexManager indexManager;
     private final MemoryExtractor extractor;
+    private final MemoryConsolidator consolidator;
+    private final EmotionEngine emotionEngine;
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(runnable -> {
                 Thread thread = new Thread(runnable, "cotalk-ai-memory-timer");
@@ -49,9 +53,9 @@ public class MemoryPipeline {
             });
 
     private volatile boolean closed;
-    private volatile boolean inFlight;
-    private volatile boolean rerun;
-    private volatile int pendingMessages;
+    private final AtomicBoolean inFlight = new AtomicBoolean(false);
+    private final AtomicBoolean rerun = new AtomicBoolean(false);
+    private final AtomicInteger pendingMessages = new AtomicInteger(0);
     private volatile long lastRoundAt;
     private ScheduledFuture<?> timer;
 
@@ -62,13 +66,27 @@ public class MemoryPipeline {
                           AiReplySink sink,
                           MemoryStore store,
                           MemoryIndexManager indexManager) {
+        this(database, messageService, client, config, sink,
+                store, indexManager, null);
+    }
+
+    public MemoryPipeline(Database database,
+                          MessageService messageService,
+                          DeepSeekClient client,
+                          AiProConfig config,
+                          AiReplySink sink,
+                          MemoryStore store,
+                          MemoryIndexManager indexManager,
+                          EmotionEngine emotionEngine) {
         this.messageService = messageService;
         this.client = client;
         this.config = config;
         this.sink = sink;
         this.store = store;
         this.indexManager = indexManager;
+        this.emotionEngine = emotionEngine;
         this.extractor = new MemoryExtractor(config);
+        this.consolidator = new MemoryConsolidator(store, config, sink);
     }
 
     public void start() {
@@ -105,15 +123,15 @@ public class MemoryPipeline {
                 || ai.AiResponder.AI_USER_ID.equals(message.senderId)) {
             return;
         }
-        pendingMessages++;
-        if (inFlight) {
-            if (pendingMessages >= config.getInt(
+        int pending = pendingMessages.incrementAndGet();
+        if (inFlight.get()) {
+            if (pending >= config.getInt(
                     "ai.pro.round.messageCount")) {
-                rerun = true;
+                rerun.set(true);
             }
             return;
         }
-        if (pendingMessages >= config.getInt("ai.pro.round.messageCount")) {
+        if (pending >= config.getInt("ai.pro.round.messageCount")) {
             trigger("messages");
             return;
         }
@@ -133,18 +151,16 @@ public class MemoryPipeline {
         if (closed) {
             return;
         }
-        if (inFlight) {
-            rerun = true;
+        if (!inFlight.compareAndSet(false, true)) {
+            rerun.set(true);
             return;
         }
-        inFlight = true;
         worker.execute(() -> {
             try {
                 runRound(type);
             } finally {
-                inFlight = false;
-                if (rerun && !closed) {
-                    rerun = false;
+                inFlight.set(false);
+                if (rerun.getAndSet(false) && !closed) {
                     trigger("pending");
                 } else if (!closed) {
                     scheduleTimer();
@@ -180,7 +196,7 @@ public class MemoryPipeline {
             long lastSeq = messageService.lastSeq();
             List<Message> window = messageService.after(
                     fromSeq, config.getInt("ai.pro.round.maxMessages"));
-            pendingMessages = 0;
+            pendingMessages.set(0);
             if (window.isEmpty()) {
                 if (lastSeq > fromSeq) {
                     store.setMeta("last_processed_seq",
@@ -215,6 +231,15 @@ public class MemoryPipeline {
             List<MemoryExtractor.Extracted> candidates =
                     extractor.parse(raw);
             extractedCount = candidates.size();
+            if (emotionEngine != null) {
+                MemoryExtractor.ExtractedEmotion emotion =
+                        extractor.parseEmotion(raw);
+                if (emotion != null) {
+                    emotionEngine.applyAiEmotion(emotion.mood,
+                            emotion.valence, emotion.arousal,
+                            emotion.intensity);
+                }
+            }
 
             List<Memory> active = store.activeMemories();
             String explicitText = joinContents(human);
@@ -261,9 +286,12 @@ public class MemoryPipeline {
                     memory.importance = MemoryScoring.importance(
                             memory, config, System.currentTimeMillis());
                     if (memory.layer == MemoryLayer.CACHE) {
+                        int ttlDays = memory.importance < 0.3
+                                && memory.accessCount == 0
+                                ? config.getInt("ai.pro.cache.ttlMinDays")
+                                : config.getInt("ai.pro.cache.ttlDays");
                         memory.expiresAt = System.currentTimeMillis()
-                                + config.getInt("ai.pro.cache.ttlDays")
-                                * 86_400_000L;
+                                + ttlDays * 86_400_000L;
                     }
                     store.insert(memory);
                     store.insertAudit(memory.memoryId, "create",
@@ -277,12 +305,19 @@ public class MemoryPipeline {
 
             finishRound(startedAt, type, fromSeq, toSeq, human.size(),
                     extractedCount, inserted, merged, "ok", "");
+            try {
+                long roundNumber = parseLong(
+                        store.getMeta("round_count", "0"), 0);
+                consolidator.consolidate(roundNumber);
+            } catch (Exception e) {
+                sink.reportError("AI Pro 记忆巩固失败：" + e.getMessage());
+            }
             indexManager.rebuildQuietly();
         } catch (Exception e) {
             sink.reportError("AI Pro 记忆轮次失败：" + e.getMessage());
             try {
                 store.insertRound(startedAt, System.currentTimeMillis(),
-                        type, fromSeq, toSeq, pendingMessages,
+                        type, fromSeq, toSeq, pendingMessages.get(),
                         extractedCount, inserted, merged, "failed",
                         e.getMessage());
             } catch (Exception ignored) {

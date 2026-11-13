@@ -344,6 +344,86 @@ public class MemoryStore {
         }
     }
 
+    public List<Memory> activeByLayer(MemoryLayer layer) throws SQLException {
+        List<Memory> result = new ArrayList<>();
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT * FROM ai_memory WHERE status = 'active' "
+                            + "AND layer = ? "
+                            + "ORDER BY importance DESC, last_access_at DESC, id ASC")) {
+                statement.setString(1, layer.dbValue);
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        result.add(map(resultSet));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public void updateLayer(Memory memory,
+                            MemoryLayer layer,
+                            long stableSince) throws SQLException {
+        memory.layer = layer;
+        memory.stableSince = stableSince;
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_memory SET layer = ?, stable_since = ? "
+                            + "WHERE id = ?")) {
+                statement.setString(1, layer.dbValue);
+                statement.setLong(2, stableSince);
+                statement.setLong(3, memory.id);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public void updateStatus(String memoryId,
+                             String status,
+                             String mergedInto,
+                             long updatedAt) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_memory SET status = ?, merged_into = ?, "
+                            + "updated_at = ? WHERE memory_id = ?")) {
+                statement.setString(1, status);
+                statement.setString(2, emptyToNull(mergedInto));
+                statement.setLong(3, updatedAt);
+                statement.setString(4, memoryId);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public void updateExpires(String memoryId, long expiresAt)
+            throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_memory SET expires_at = ? WHERE memory_id = ?")) {
+                statement.setLong(1, expiresAt);
+                statement.setString(2, memoryId);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public void deletePhysicalBefore(long cutoff) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM ai_memory WHERE status = 'deleted' "
+                            + "AND updated_at < ?")) {
+                statement.setLong(1, cutoff);
+                statement.executeUpdate();
+            }
+        }
+    }
+
     private static Memory map(ResultSet result) throws SQLException {
         Memory memory = new Memory();
         memory.id = result.getLong("id");

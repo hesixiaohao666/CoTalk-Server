@@ -65,6 +65,13 @@ public final class AiProPrompts {
     public static String buildSystemPrompt(CoreMemory memory,
                                            int maxChars,
                                            int maxMessages) {
+        return buildSystemPrompt(memory, maxChars, maxMessages, "");
+    }
+
+    public static String buildSystemPrompt(CoreMemory memory,
+                                           int maxChars,
+                                           int maxMessages,
+                                           String emotionSection) {
         CoreMemory core = memory == null
                 ? new CoreMemory("你是 CoTalk 群聊中的 AI 群友", "大肥鱼",
                 "交流语言：简体中文", "礼貌、简洁、自然，不冒充人类",
@@ -83,8 +90,11 @@ public final class AiProPrompts {
         }
         builder.append("\n【核心提示词】\n")
                 .append(core.custom.trim().isEmpty()
-                        ? "保持自然、简洁的群聊表达。" : core.custom.trim())
-                .append("\n\n【回复规则】\n")
+                        ? "保持自然、简洁的群聊表达。" : core.custom.trim());
+        if (emotionSection != null && !emotionSection.trim().isEmpty()) {
+            builder.append("\n\n").append(emotionSection.trim());
+        }
+        builder.append("\n\n【回复规则】\n")
                 .append("- 被 @ 时必须回复至少一条。\n")
                 .append("- 关键词/随机触发时可自主判断；没有必要则输出 send=false。\n")
                 .append("- 遇到违法违规或违背道德的内容必须拒绝。\n")

@@ -18,6 +18,13 @@ import java.util.Set;
  */
 public final class MemoryExtractor {
 
+    public static final class ExtractedEmotion {
+        public String mood = "";
+        public double valence;
+        public double arousal;
+        public double intensity;
+    }
+
     public static final class Extracted {
         public String content = "";
         public String category = "other";
@@ -99,6 +106,26 @@ public final class MemoryExtractor {
             }
             result.add(memory);
         }
+        return result;
+    }
+
+    public ExtractedEmotion parseEmotion(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        JsonObject object = JsonUtil.parseObject(stripCodeFence(raw.trim()));
+        if (object == null || !object.has("emotion")
+                || !object.get("emotion").isJsonObject()) {
+            return null;
+        }
+        JsonObject emotion = object.getAsJsonObject("emotion");
+        ExtractedEmotion result = new ExtractedEmotion();
+        result.mood = string(emotion, "mood", "");
+        result.valence = clampSigned(doubleValue(emotion, "valence", 0));
+        result.arousal = MemoryScoring.clamp(
+                doubleValue(emotion, "arousal", 0));
+        result.intensity = MemoryScoring.clamp(
+                doubleValue(emotion, "intensity", 0));
         return result;
     }
 
@@ -227,6 +254,10 @@ public final class MemoryExtractor {
 
     private static boolean snapFlag(double value) {
         return value >= 0.5;
+    }
+
+    private static double clampSigned(double value) {
+        return Math.max(-1, Math.min(1, value));
     }
 
     private static double snapFactor(double value) {

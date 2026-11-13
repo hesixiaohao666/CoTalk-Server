@@ -27,6 +27,7 @@ public class AiProResponder extends DeepSeekAiResponder {
     private final MemoryIndexManager indexManager;
     private final MemoryRetriever retriever;
     private final MemoryPipeline pipeline;
+    private final EmotionEngine emotionEngine;
 
     public AiProResponder(ServerConfig config,
                           DeepSeekClient client,
@@ -50,14 +51,19 @@ public class AiProResponder extends DeepSeekAiResponder {
             this.memoryStore = new MemoryStore(database);
             this.indexManager = new MemoryIndexManager(memoryStore);
             this.retriever = new MemoryRetriever();
+            this.emotionEngine = new EmotionEngine(
+                    config.aiPro, new EmotionStore(database), sink);
+            this.emotionEngine.start();
             this.pipeline = new MemoryPipeline(
                     database, messageService, client,
-                    config.aiPro, sink, memoryStore, indexManager);
+                    config.aiPro, sink, memoryStore, indexManager,
+                    emotionEngine);
             this.pipeline.start();
         } else {
             this.memoryStore = null;
             this.indexManager = null;
             this.retriever = null;
+            this.emotionEngine = null;
             this.pipeline = null;
         }
     }
@@ -74,10 +80,13 @@ public class AiProResponder extends DeepSeekAiResponder {
                     config.aiPromptCustom,
                     config.aiPro.ownerNames());
         }
+        String emotion = emotionEngine == null
+                ? "" : emotionEngine.promptSection();
         return AiProPrompts.buildSystemPrompt(
                 memory,
                 config.aiMessageMaxChars,
-                config.aiMaxMessages);
+                config.aiMaxMessages,
+                emotion);
     }
 
     @Override
@@ -90,6 +99,10 @@ public class AiProResponder extends DeepSeekAiResponder {
     public void onMessage(model.Member sender,
                           Message message,
                           List<Message> recentContext) {
+        if (emotionEngine != null) {
+            emotionEngine.onMessage(sender, message,
+                    isDirectMention(message.content));
+        }
         if (pipeline != null) {
             pipeline.onMessage(message);
         }
@@ -178,6 +191,11 @@ public class AiProResponder extends DeepSeekAiResponder {
             }
         }
         return tags;
+    }
+
+    public String getEmotionStatus() {
+        return emotionEngine == null
+                ? "未启用" : emotionEngine.statusText();
     }
 
     @Override

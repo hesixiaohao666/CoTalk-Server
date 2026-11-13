@@ -81,6 +81,10 @@ public class DeepSeekAiResponder implements AiResponder {
         return true;
     }
 
+    protected boolean isDirectMention(String content) {
+        return containsAny(content, directMentions);
+    }
+
     @Override
     public void onMessage(Member sender,
                           Message message,
