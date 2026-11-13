@@ -26,8 +26,8 @@ public final class AiProConfig {
         put("ai.pro.migrate.importHistory", "false");
         put("ai.pro.migrate.backup", "true");
 
-        put("ai.pro.round.intervalMs", "1800000");
-        put("ai.pro.round.messageCount", "20");
+        put("ai.pro.round.intervalMs", "1200000");
+        put("ai.pro.round.messageCount", "10");
         put("ai.pro.round.maxMessages", "200");
         put("ai.pro.round.minMessages", "1");
         put("ai.pro.round.pendingMax", "1");

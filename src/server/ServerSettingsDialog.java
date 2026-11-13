@@ -62,6 +62,8 @@ public class ServerSettingsDialog extends JDialog {
             new JCheckBox("AI群友Pro（实验性功能）");
     private final List<JComponent> proOnlyAiRows = new ArrayList<>();
     private final List<JComponent> classicOnlyAiRows = new ArrayList<>();
+    private final JTextField aiProRoundMinutesField = new JTextField(10);
+    private final JTextField aiProRoundMessagesField = new JTextField(10);
     private final JTextField aiProContextMessagesField = new JTextField(10);
     private final JTextField aiProPromptMaxCharsField = new JTextField(10);
     private final JTextField aiProMemoryMaxCharsField = new JTextField(10);
@@ -253,6 +255,10 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
         addRow(form, row++, "随机参与概率", aiRandomChanceField, "0–100");
 
+        addRow(form, row++, "Pro 轮次间隔", aiProRoundMinutesField,
+                "分钟，默认 20", proOnlyAiRows);
+        addRow(form, row++, "Pro 轮次消息数", aiProRoundMessagesField,
+                "默认 10 条", proOnlyAiRows);
         addRow(form, row++, "Pro 上下文条数", aiProContextMessagesField,
                 "默认 10", proOnlyAiRows);
         addRow(form, row++, "Pro 提示词上限", aiProPromptMaxCharsField,
@@ -481,6 +487,7 @@ public class ServerSettingsDialog extends JDialog {
                 roomNameField, announcementField,
                 roomAvatarField, dbPathField, authKeyField,
                 adminKeyField,
+                aiProRoundMinutesField, aiProRoundMessagesField,
                 aiProContextMessagesField, aiProPromptMaxCharsField,
                 aiProMemoryMaxCharsField, aiProOwnerNamesField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
@@ -538,6 +545,11 @@ public class ServerSettingsDialog extends JDialog {
 
         aiProEnabledCheck.setSelected(original.aiProEnabled);
         updateAiModeVisibility();
+        aiProRoundMinutesField.setText(String.valueOf(
+                original.aiPro.getInt("ai.pro.round.intervalMs")
+                        / 60000));
+        aiProRoundMessagesField.setText(String.valueOf(original.aiPro.getInt(
+                "ai.pro.round.messageCount")));
         aiProContextMessagesField.setText(String.valueOf(original.aiPro.getInt(
                 "ai.pro.prompt.contextMessages")));
         aiProPromptMaxCharsField.setText(String.valueOf(original.aiPro.getInt(
@@ -770,6 +782,15 @@ public class ServerSettingsDialog extends JDialog {
 
         properties.setProperty("ai.pro.enabled",
                 String.valueOf(aiProEnabledCheck.isSelected()));
+        int roundMinutes = readInt(aiProRoundMinutesField, "Pro 轮次间隔");
+        if (roundMinutes < 1 || roundMinutes > 1440) {
+            throw new IllegalArgumentException("Pro 轮次间隔必须在 1–1440 分钟之间");
+        }
+        properties.setProperty("ai.pro.round.intervalMs",
+                String.valueOf(roundMinutes * 60000L));
+        properties.setProperty("ai.pro.round.messageCount",
+                String.valueOf(readInt(aiProRoundMessagesField,
+                        "Pro 轮次消息数")));
         properties.setProperty("ai.pro.prompt.contextMessages",
                 String.valueOf(readInt(aiProContextMessagesField,
                         "Pro 上下文条数")));
