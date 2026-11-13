@@ -213,7 +213,7 @@ public class DeepSeekAiResponder implements AiResponder {
                 if (i > 0 && config.aiReplyDelayMs > 0) {
                     Thread.sleep(config.aiReplyDelayMs);
                 }
-                sink.appendAiMessage(reply.messages.get(i));
+                sendReplyMessage(reply.messages.get(i));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -320,6 +320,13 @@ public class DeepSeekAiResponder implements AiResponder {
             List<String> mergedMessages,
             List<Message> context) {
         return Collections.emptyList();
+    }
+
+    /**
+     * Pro 引擎可在此把 [[emoji:id]] 转为表情消息。
+     */
+    protected void sendReplyMessage(String content) throws Exception {
+        sink.appendAiMessage(content);
     }
 
     private List<AiMessage> buildRequestMessages(List<String> mergedMessages,

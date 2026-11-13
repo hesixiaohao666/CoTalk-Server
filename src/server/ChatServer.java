@@ -617,6 +617,23 @@ public class ChatServer implements AiReplySink {
     }
 
     @Override
+    public void appendAiEmojiMessage(model.Attachment attachment,
+                                     String content) throws Exception {
+        if (!running) {
+            return;
+        }
+        Member aiMember = roomService.getAiMember();
+        if (aiMember == null) {
+            throw new IllegalStateException("AI 成员尚未初始化");
+        }
+        Message message = messageService.appendAiEmojiMessage(
+                aiMember, content, attachment);
+        broadcastMessage(message, null);
+        events.onLog("[#" + message.seq + "] "
+                + aiMember.nickname + "：[表情]");
+    }
+
+    @Override
     public void reportFailure(String message) {
         if (!running) {
             return;

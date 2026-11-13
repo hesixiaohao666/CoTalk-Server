@@ -1,5 +1,7 @@
 package ai;
 
+import model.Attachment;
+
 /**
  * AI 回复的发送出口。由服务端实现，负责落库、生成 seq 并广播。
  */
@@ -10,7 +12,7 @@ public interface AiReplySink {
     /**
      * AI 表情消息。阶段 B 尚未启用，默认视为不支持。
      */
-    default void appendAiEmojiMessage(String fileId, String content)
+    default void appendAiEmojiMessage(Attachment attachment, String content)
             throws Exception {
         throw new UnsupportedOperationException("当前 AI 引擎不支持表情消息");
     }

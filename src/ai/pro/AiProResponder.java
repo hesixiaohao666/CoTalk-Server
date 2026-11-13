@@ -6,16 +6,20 @@ import ai.AiReplySink;
 import ai.DeepSeekAiResponder;
 import ai.DeepSeekClient;
 import model.Message;
+import server.AttachmentService;
 import server.MessageService;
 import server.ServerConfig;
 import store.Database;
 
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * AI群友Pro 回复引擎（阶段 C/D）：核心记忆 + 长期记忆检索 + 记忆轮次管线。
@@ -28,6 +32,10 @@ public class AiProResponder extends DeepSeekAiResponder {
     private final MemoryRetriever retriever;
     private final MemoryPipeline pipeline;
     private final EmotionEngine emotionEngine;
+    private final AiEmojiService emojiService;
+    private final AiTodoService todoService;
+    private static final Pattern EMOJI_TOKEN = Pattern.compile(
+            "\\[\\[emoji:([A-Za-z0-9_-]+)]]");
 
     public AiProResponder(ServerConfig config,
                           DeepSeekClient client,
@@ -45,6 +53,18 @@ public class AiProResponder extends DeepSeekAiResponder {
                           CoreMemoryStore coreMemoryStore,
                           Database database,
                           MessageService messageService) {
+        this(config, client, sink, imageResolver, coreMemoryStore,
+                database, messageService, null);
+    }
+
+    public AiProResponder(ServerConfig config,
+                          DeepSeekClient client,
+                          AiReplySink sink,
+                          AiImageResolver imageResolver,
+                          CoreMemoryStore coreMemoryStore,
+                          Database database,
+                          MessageService messageService,
+                          AttachmentService attachmentService) {
         super(config, client, sink, imageResolver);
         this.coreMemoryStore = coreMemoryStore;
         if (database != null && messageService != null) {
@@ -54,16 +74,39 @@ public class AiProResponder extends DeepSeekAiResponder {
             this.emotionEngine = new EmotionEngine(
                     config.aiPro, new EmotionStore(database), sink);
             this.emotionEngine.start();
+            AiTodoService todos = null;
+            try {
+                todos = new AiTodoService(
+                        new AiTodoStore(database), config.aiPro, sink);
+                todos.start();
+            } catch (Exception e) {
+                sink.reportError("AI Pro 待办初始化失败：" + e.getMessage());
+            }
+            this.todoService = todos;
+            AiEmojiService emojis = null;
+            if (attachmentService != null) {
+                try {
+                    AiEmojiStore emojiStore = new AiEmojiStore(
+                            database, Paths.get("data", "ai-pro", "emoji"));
+                    emojis = new AiEmojiService(
+                            emojiStore, attachmentService, config.aiPro, sink);
+                } catch (Exception e) {
+                    sink.reportError("AI Pro 表情库初始化失败：" + e.getMessage());
+                }
+            }
+            this.emojiService = emojis;
             this.pipeline = new MemoryPipeline(
                     database, messageService, client,
                     config.aiPro, sink, memoryStore, indexManager,
-                    emotionEngine);
+                    emotionEngine, todoService);
             this.pipeline.start();
         } else {
             this.memoryStore = null;
             this.indexManager = null;
             this.retriever = null;
             this.emotionEngine = null;
+            this.todoService = null;
+            this.emojiService = null;
             this.pipeline = null;
         }
     }
@@ -82,11 +125,19 @@ public class AiProResponder extends DeepSeekAiResponder {
         }
         String emotion = emotionEngine == null
                 ? "" : emotionEngine.promptSection();
+        String mood = emotionEngine == null
+                ? "" : emotionEngine.getState().mood;
+        String emoji = emojiService == null
+                ? "" : emojiService.promptSection(mood);
+        String extra = emotion;
+        if (!emoji.isEmpty()) {
+            extra = extra.isEmpty() ? emoji : extra + "\n\n" + emoji;
+        }
         return AiProPrompts.buildSystemPrompt(
                 memory,
                 config.aiMessageMaxChars,
                 config.aiMaxMessages,
-                emotion);
+                extra);
     }
 
     @Override
@@ -193,6 +244,25 @@ public class AiProResponder extends DeepSeekAiResponder {
         return tags;
     }
 
+    @Override
+    protected void sendReplyMessage(String content) throws Exception {
+        if (emojiService != null && content != null) {
+            Matcher matcher = EMOJI_TOKEN.matcher(content);
+            if (matcher.find()) {
+                String emojiId = matcher.group(1);
+                if (emojiService.send(emojiId, null)) {
+                    return;
+                }
+                String remaining = matcher.replaceFirst("").trim();
+                if (!remaining.isEmpty()) {
+                    super.sendReplyMessage(remaining);
+                }
+                return;
+            }
+        }
+        super.sendReplyMessage(content);
+    }
+
     public String getEmotionStatus() {
         return emotionEngine == null
                 ? "未启用" : emotionEngine.statusText();
@@ -202,6 +272,9 @@ public class AiProResponder extends DeepSeekAiResponder {
     public void shutdown() {
         if (pipeline != null) {
             pipeline.shutdown();
+        }
+        if (todoService != null) {
+            todoService.shutdown();
         }
         super.shutdown();
     }

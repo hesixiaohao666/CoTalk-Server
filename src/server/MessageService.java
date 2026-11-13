@@ -131,6 +131,33 @@ public class MessageService {
         return message;
     }
 
+    public synchronized Message appendAiEmojiMessage(Member aiMember,
+                                                      String content,
+                                                      Attachment attachment)
+            throws SQLException {
+        Message message = new Message();
+        message.msgUuid = newMsgUuid();
+        message.seq = nextSeq;
+        message.senderId = aiMember.id;
+        message.senderName = aiMember.nickname;
+        message.senderTag = "";
+        message.senderAvatarVersion = aiMember.avatarVersion;
+        message.content = content == null ? "" : content;
+        message.type = "emoji";
+        message.createdAt = System.currentTimeMillis();
+        if (attachment != null) {
+            attachment.messageUuid = message.msgUuid;
+            message.fileId = attachment.fileId;
+            message.fileName = attachment.fileName;
+            message.fileMime = attachment.mime;
+            message.fileSize = attachment.size;
+            message.fileExpired = attachment.expired;
+        }
+        messageStore.insert(message, attachment);
+        nextSeq++;
+        return message;
+    }
+
     public synchronized long lastSeq() {
         return Math.max(0L, nextSeq - 1);
     }

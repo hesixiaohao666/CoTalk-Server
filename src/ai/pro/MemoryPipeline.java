@@ -39,6 +39,7 @@ public class MemoryPipeline {
     private final MemoryExtractor extractor;
     private final MemoryConsolidator consolidator;
     private final EmotionEngine emotionEngine;
+    private final AiTodoService todoService;
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(runnable -> {
                 Thread thread = new Thread(runnable, "cotalk-ai-memory-timer");
@@ -78,6 +79,19 @@ public class MemoryPipeline {
                           MemoryStore store,
                           MemoryIndexManager indexManager,
                           EmotionEngine emotionEngine) {
+        this(database, messageService, client, config, sink,
+                store, indexManager, emotionEngine, null);
+    }
+
+    public MemoryPipeline(Database database,
+                          MessageService messageService,
+                          DeepSeekClient client,
+                          AiProConfig config,
+                          AiReplySink sink,
+                          MemoryStore store,
+                          MemoryIndexManager indexManager,
+                          EmotionEngine emotionEngine,
+                          AiTodoService todoService) {
         this.messageService = messageService;
         this.client = client;
         this.config = config;
@@ -85,6 +99,7 @@ public class MemoryPipeline {
         this.store = store;
         this.indexManager = indexManager;
         this.emotionEngine = emotionEngine;
+        this.todoService = todoService;
         this.extractor = new MemoryExtractor(config);
         this.consolidator = new MemoryConsolidator(store, config, sink);
     }
@@ -239,6 +254,12 @@ public class MemoryPipeline {
                             emotion.valence, emotion.arousal,
                             emotion.intensity);
                 }
+            }
+            if (todoService != null) {
+                todoService.process(
+                        extractor.parseTodos(raw),
+                        extractor.parseTodoActions(raw),
+                        human);
             }
 
             List<Memory> active = store.activeMemories();
