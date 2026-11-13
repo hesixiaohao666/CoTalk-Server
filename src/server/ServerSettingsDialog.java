@@ -9,6 +9,7 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Properties;
@@ -43,6 +44,12 @@ public class ServerSettingsDialog extends JDialog {
     private final JCheckBox featureVoiceCheck = new JCheckBox("启用语音发送");
     private final JCheckBox featureEmojiCheck = new JCheckBox("启用表情包发送");
     private final JCheckBox pushEnabledCheck = new JCheckBox("启用后台推送");
+
+    private final JCheckBox adminEnabledCheck = new JCheckBox("启用管理员模式");
+    private final JPasswordField adminKeyField = new JPasswordField(24);
+    private final JCheckBox showAdminKey = new JCheckBox("显示");
+    private final JButton generateAdminKeyButton = new JButton("生成随机");
+    private final JLabel adminKeyStatusLabel = new JLabel();
 
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
     private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
@@ -84,6 +91,7 @@ public class ServerSettingsDialog extends JDialog {
         applyFont(getContentPane(), uiFont(Font.PLAIN, 14));
         styleFields();
         styleButton(generateKeyButton, false);
+        styleButton(generateAdminKeyButton, false);
         styleButton(browseAvatarButton, false);
         styleButton(browseRoomAvatarButton, false);
     }
@@ -255,34 +263,35 @@ public class ServerSettingsDialog extends JDialog {
 
     private JPanel buildAdminPanel() {
         JPanel panel = formPanel();
-        JPanel content = new JPanel(new BorderLayout(0, 12));
-        content.setOpaque(false);
+        int row = 0;
+        addRow(panel, row++, "管理员模式", adminEnabledCheck,
+                "关闭后拒绝所有管理员绑定");
+        addRow(panel, row++, "管理员密钥状态", adminKeyStatusLabel, null);
 
-        JLabel note = new JLabel("管理员模式用于未来的服务端管理能力。");
-        note.setForeground(new Color(0x777777));
-        content.add(note, BorderLayout.NORTH);
+        JPanel keyRow = new JPanel(new BorderLayout(6, 0));
+        keyRow.setOpaque(false);
+        keyRow.add(adminKeyField, BorderLayout.CENTER);
+        JPanel keyActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        keyActions.setOpaque(false);
+        keyActions.add(showAdminKey);
+        keyActions.add(generateAdminKeyButton);
+        keyRow.add(keyActions, BorderLayout.EAST);
+        addRow(panel, row++, "设置新密钥", keyRow,
+                "留空保留现有密钥");
 
-        JButton adminButton = new JButton("管理员模式");
-        styleButton(adminButton, true);
-        adminButton.addActionListener(e -> JOptionPane.showMessageDialog(
-                this,
-                "管理员模式暂未实装，敬请期待",
-                "管理员",
-                JOptionPane.INFORMATION_MESSAGE));
-        JPanel actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        actionRow.setOpaque(false);
-        actionRow.add(adminButton);
-        content.add(actionRow, BorderLayout.CENTER);
+        addNote(panel, row++,
+                "管理员密钥仅保存 PBKDF2 派生 verifier，配置文件不会回显明文。");
+        addNote(panel, row++,
+                "生成新密钥后请立即复制保存；保存配置后将不再显示明文。");
+        addNote(panel, row++,
+                "启用管理员模式前必须已设置密钥；修改管理员配置后需要重启服务。");
 
-        GridBagConstraints constraints = new GridBagConstraints();
-        constraints.gridx = 0;
-        constraints.gridy = 0;
-        constraints.weightx = 1;
-        constraints.weighty = 1;
-        constraints.fill = GridBagConstraints.BOTH;
-        constraints.anchor = GridBagConstraints.NORTHWEST;
-        panel.add(content, constraints);
-        return panel;
+        JScrollPane scroll = new JScrollPane(panel);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.add(scroll, BorderLayout.CENTER);
+        return wrapper;
     }
 
     private JPanel buildAboutPanel() {
@@ -405,6 +414,7 @@ public class ServerSettingsDialog extends JDialog {
                 heartbeatTimeoutField, reconnectGraceField,
                 roomNameField, announcementField,
                 roomAvatarField, dbPathField, authKeyField,
+                adminKeyField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
                 aiMentionsField, aiKeywordsField, aiKeywordChanceField,
                 aiRandomChanceField, aiAvatarField, aiCooldownField,
@@ -454,6 +464,9 @@ public class ServerSettingsDialog extends JDialog {
         featureVoiceCheck.setSelected(original.featureVoice);
         featureEmojiCheck.setSelected(original.featureEmoji);
         pushEnabledCheck.setSelected(original.pushEnabled);
+        adminEnabledCheck.setSelected(original.adminEnabled);
+        adminKeyField.setText("");
+        updateAdminKeyStatus(false);
 
         aiEnabledCheck.setSelected(original.aiEnabled);
         aiVisionCheck.setSelected(original.aiVision);
@@ -490,6 +503,31 @@ public class ServerSettingsDialog extends JDialog {
         });
         browseAvatarButton.addActionListener(e -> browseAvatar());
         browseRoomAvatarButton.addActionListener(e -> browseRoomAvatar());
+        showAdminKey.addActionListener(e -> {
+            adminKeyField.setEchoChar(showAdminKey.isSelected()
+                    ? (char) 0 : PASSWORD_ECHO);
+        });
+        generateAdminKeyButton.addActionListener(e -> {
+            adminKeyField.setText(AdminAuth.generateKey());
+            showAdminKey.setSelected(true);
+            adminKeyField.setEchoChar((char) 0);
+            updateAdminKeyStatus(true);
+        });
+    }
+
+    private void updateAdminKeyStatus(boolean pendingNewKey) {
+        if (pendingNewKey) {
+            adminKeyStatusLabel.setText("待保存：将更新管理员密钥");
+            adminKeyStatusLabel.setForeground(new Color(0xB26A00));
+            return;
+        }
+        boolean configured = original.adminVerifier != null
+                && !original.adminVerifier.isEmpty();
+        adminKeyStatusLabel.setText(configured ? "已设置" : "未设置");
+        adminKeyStatusLabel.setForeground(new Color(0x2E7D32));
+        if (!configured) {
+            adminKeyStatusLabel.setForeground(new Color(0x777777));
+        }
     }
 
     private void setVisible(JPasswordField field, JCheckBox toggle) {
@@ -524,6 +562,7 @@ public class ServerSettingsDialog extends JDialog {
         try {
             ServerConfig updated = buildConfig();
             ServerConfigStore.save(updated, configPath);
+            adminKeyField.setText("");
             savedConfig = updated;
             dispose();
         } catch (IllegalArgumentException e) {
@@ -553,6 +592,28 @@ public class ServerSettingsDialog extends JDialog {
             throw new IllegalArgumentException("连接密钥不能为空");
         }
 
+        String adminKey = password(adminKeyField);
+        String adminSalt = original.adminSalt;
+        String adminVerifier = original.adminVerifier;
+        int adminIterations = original.adminIterations > 0
+                ? original.adminIterations : AdminAuth.DEFAULT_ITERATIONS;
+        if (!adminKey.isEmpty()) {
+            adminSalt = AdminAuth.generateSalt();
+            try {
+                adminVerifier = AdminAuth.createVerifier(
+                        adminKey, adminSalt, adminIterations);
+            } catch (GeneralSecurityException e) {
+                throw new IllegalArgumentException(
+                        "管理员密钥处理失败：" + e.getMessage());
+            }
+        }
+        boolean adminEnabled = adminEnabledCheck.isSelected();
+        if (adminEnabled && (adminSalt.isEmpty() || adminVerifier.isEmpty())) {
+            adminKeyField.requestFocusInWindow();
+            throw new IllegalArgumentException(
+                    "启用管理员模式前必须设置管理员密钥");
+        }
+
         Properties properties = original.toProperties();
         properties.setProperty("server.port",
                 String.valueOf(readInt(portField, "服务器端口")));
@@ -578,6 +639,12 @@ public class ServerSettingsDialog extends JDialog {
                 String.valueOf(featureEmojiCheck.isSelected()));
         properties.setProperty("push.enabled",
                 String.valueOf(pushEnabledCheck.isSelected()));
+
+        properties.setProperty("admin.enabled", String.valueOf(adminEnabled));
+        properties.setProperty("admin.salt", adminSalt);
+        properties.setProperty("admin.iterations",
+                String.valueOf(adminIterations));
+        properties.setProperty("admin.verifier", adminVerifier);
 
         properties.setProperty("ai.enabled",
                 String.valueOf(aiEnabledCheck.isSelected()));

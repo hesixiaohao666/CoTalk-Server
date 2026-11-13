@@ -174,6 +174,35 @@ public final class ServerConfigStore {
         if (config.adminIterations <= 0) {
             throw new IllegalArgumentException("admin.iterations 必须大于 0");
         }
+        if (config.adminEnabled && (config.adminSalt.isEmpty()
+                || config.adminVerifier.isEmpty())) {
+            throw new IllegalArgumentException(
+                    "启用管理员模式前必须设置管理员密钥");
+        }
+        if (!config.adminSalt.isEmpty()) {
+            byte[] salt;
+            try {
+                salt = Base64.getUrlDecoder().decode(config.adminSalt);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "admin.salt 不是有效的 Base64 URL 字符串");
+            }
+            if (salt.length != AdminAuth.SALT_BYTES) {
+                throw new IllegalArgumentException("admin.salt 长度非法");
+            }
+        }
+        if (!config.adminVerifier.isEmpty()) {
+            byte[] verifier;
+            try {
+                verifier = Base64.getUrlDecoder().decode(config.adminVerifier);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "admin.verifier 不是有效的 Base64 URL 字符串");
+            }
+            if (verifier.length != AdminAuth.VERIFIER_BITS / 8) {
+                throw new IllegalArgumentException("admin.verifier 长度非法");
+            }
+        }
         if (config.aiCooldownMs < 0 || config.aiMaxContext <= 0
                 || config.aiTimeoutMs <= 0 || config.aiMaxTokens <= 0) {
             throw new IllegalArgumentException("AI 数值配置非法");

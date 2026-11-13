@@ -40,6 +40,8 @@ import javax.crypto.spec.SecretKeySpec;
 public class ClientHandler implements Runnable {
 
     private static final int HANDSHAKE_TIMEOUT_MS = 5000;
+    private static final int ADMIN_MAX_FAILURES = 5;
+    private static final long ADMIN_CHALLENGE_TTL_MS = 60_000L;
 
     private enum State {
         CONNECTED,
@@ -77,6 +79,10 @@ public class ClientHandler implements Runnable {
     private int clientVersionCode = -1;
     private long rateWindowStart;
     private int rateCount;
+    private String adminNonce = "";
+    private long adminChallengeExpiresAt;
+    private int adminAuthFailures;
+    private long adminAuthNextAttemptAt;
 
     public ClientHandler(Socket socket,
                          ChatServer server,
@@ -226,6 +232,12 @@ public class ClientHandler implements Runnable {
                 return true;
             case Protocol.POKE_REQ:
                 handlePoke(data, reqId);
+                return true;
+            case Protocol.ADMIN_AUTH_BEGIN:
+                handleAdminAuthBegin(data, reqId);
+                return true;
+            case Protocol.ADMIN_AUTH_RESPONSE:
+                handleAdminAuthResponse(data, reqId);
                 return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
@@ -731,6 +743,114 @@ public class ClientHandler implements Runnable {
         String notice = member.nickname + " 拍了拍 " + target.nickname
                 + (signature.isEmpty() ? "" : "，" + signature);
         server.broadcastSystemMessage(notice);
+    }
+
+    private void handleAdminAuthBegin(JsonObject data, String reqId) {
+        if (!config.adminEnabled) {
+            send(Protocol.error(Protocol.ERR_ADMIN_DISABLED,
+                    "服务端未启用管理员模式", reqId));
+            return;
+        }
+        if (config.adminSalt.isEmpty() || config.adminVerifier.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_ADMIN_DISABLED,
+                    "服务端尚未设置管理员密钥", reqId));
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (adminAuthFailures >= ADMIN_MAX_FAILURES) {
+            send(Protocol.error(Protocol.ERR_ADMIN_RATE_LIMIT,
+                    "管理员密钥尝试次数过多，请重新连接", reqId));
+            return;
+        }
+        if (now < adminAuthNextAttemptAt) {
+            long waitMs = adminAuthNextAttemptAt - now;
+            send(Protocol.error(Protocol.ERR_ADMIN_RATE_LIMIT,
+                    "尝试过于频繁，请 " + ((waitMs + 999) / 1000)
+                            + " 秒后重试", reqId));
+            return;
+        }
+
+        adminNonce = AdminAuth.generateNonce();
+        adminChallengeExpiresAt = now + ADMIN_CHALLENGE_TTL_MS;
+
+        JsonObject challenge = new JsonObject();
+        challenge.addProperty("salt", config.adminSalt);
+        challenge.addProperty("iterations", config.adminIterations);
+        challenge.addProperty("nonce", adminNonce);
+        challenge.addProperty("expiresInMs", ADMIN_CHALLENGE_TTL_MS);
+        challenge.addProperty("algorithm", "PBKDF2WithHmacSHA256");
+        challenge.addProperty("proofAlgorithm", "HmacSHA256");
+        send(Protocol.frame(Protocol.ADMIN_AUTH_CHALLENGE, reqId, challenge));
+    }
+
+    private void handleAdminAuthResponse(JsonObject data, String reqId) {
+        if (!config.adminEnabled
+                || config.adminSalt.isEmpty()
+                || config.adminVerifier.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_ADMIN_DISABLED,
+                    "服务端未启用管理员模式", reqId));
+            return;
+        }
+        if (adminAuthFailures >= ADMIN_MAX_FAILURES) {
+            send(Protocol.error(Protocol.ERR_ADMIN_RATE_LIMIT,
+                    "管理员密钥尝试次数过多，请重新连接", reqId));
+            return;
+        }
+        if (adminNonce.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_ADMIN_AUTH,
+                    "管理员挑战已失效，请重新请求", reqId));
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now > adminChallengeExpiresAt) {
+            adminNonce = "";
+            send(Protocol.error(Protocol.ERR_ADMIN_AUTH,
+                    "管理员挑战已过期，请重新请求", reqId));
+            return;
+        }
+
+        String nonce = adminNonce;
+        adminNonce = "";
+        String proof = optString(data, "proof", "");
+        boolean valid = AdminAuth.verifyProof(
+                config.adminVerifier, nonce, proof);
+        if (!valid) {
+            adminAuthFailures++;
+            long delayMs = Math.min(
+                    8000L, 1000L << Math.min(adminAuthFailures - 1, 3));
+            adminAuthNextAttemptAt = now + delayMs;
+            String nickname = member == null ? "" : member.nickname;
+            server.getEvents().onLog("管理员密钥验证失败：" + nickname
+                    + " / " + ip + "（第 " + adminAuthFailures + " 次）");
+            if (adminAuthFailures >= ADMIN_MAX_FAILURES) {
+                send(Protocol.error(Protocol.ERR_ADMIN_RATE_LIMIT,
+                        "管理员密钥尝试次数过多，请重新连接", reqId));
+            } else {
+                send(Protocol.error(Protocol.ERR_ADMIN_AUTH,
+                        "管理员密钥错误", reqId));
+            }
+            return;
+        }
+
+        if (member == null) {
+            send(Protocol.error(Protocol.ERR_NOT_JOINED,
+                    "请先加入房间", reqId));
+            return;
+        }
+
+        adminAuthFailures = 0;
+        adminAuthNextAttemptAt = 0L;
+        member.admin = true;
+
+        JsonObject ok = new JsonObject();
+        ok.addProperty("admin", true);
+        send(Protocol.frame(Protocol.ADMIN_AUTH_OK, reqId, ok));
+        server.broadcastMemberList();
+        server.notifyMembersChanged();
+        server.getEvents().onLog(member.nickname
+                + " 已绑定管理员身份，IP：" + ip);
     }
 
     private void handleRecallRequest(JsonObject data, String reqId) {
