@@ -36,6 +36,7 @@ public final class ServerRuntime {
     private RoomService roomService;
     private ChatServer chatServer;
     private AiResponder aiResponder;
+    private ai.pro.AiProAdminService aiProAdminService;
     private AttachmentService attachmentService;
 
     public ServerRuntime(ServerConfig config, ServerEvents events) {
@@ -59,6 +60,12 @@ public final class ServerRuntime {
         database = new Database(config.dbPath);
         database.open();
         try {
+            try {
+                aiProAdminService = new ai.pro.AiProAdminService(
+                        database, config, events::onLog);
+            } catch (Exception e) {
+                events.onLog("AI Pro 管理服务初始化失败：" + e.getMessage());
+            }
             RoomStore roomStore = new RoomStore(database);
             room = roomStore.loadOrCreate(
                     config.roomName, config.roomAnnouncement);
@@ -128,6 +135,12 @@ public final class ServerRuntime {
                         config, chatServer, imageResolver);
             }
             aiResponder = responder;
+            if (aiProAdminService != null
+                    && responder instanceof ai.pro.AiProResponder) {
+                ai.pro.AiProResponder pro = (ai.pro.AiProResponder) responder;
+                aiProAdminService.setIndexRebuilder(pro::rebuildMemoryIndex);
+                aiProAdminService.setEmotionResetter(pro::resetEmotion);
+            }
             chatServer.setAiResponder(responder);
             chatServer.start();
             attachmentService.startMaintenance();
@@ -154,6 +167,7 @@ public final class ServerRuntime {
             chatServer = null;
         }
         aiResponder = null;
+        aiProAdminService = null;
         if (attachmentService != null) {
             attachmentService.shutdownMaintenance();
             attachmentService = null;
@@ -229,6 +243,10 @@ public final class ServerRuntime {
                     Protocol.ERR_INTERNAL, "服务未启动");
         }
         return chatServer.forceRecallBySeq(seq);
+    }
+
+    public ai.pro.AiProAdminService getAiProAdminService() {
+        return aiProAdminService;
     }
 
     public String getAiProEmotionStatus() {

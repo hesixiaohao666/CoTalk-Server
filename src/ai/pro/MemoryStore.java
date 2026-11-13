@@ -344,6 +344,138 @@ public class MemoryStore {
         }
     }
 
+    public List<Memory> search(String query,
+                               MemoryLayer layer,
+                               String status,
+                               int limit,
+                               int offset) throws SQLException {
+        List<Memory> result = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "SELECT * FROM ai_memory WHERE 1=1");
+        boolean hasQuery = query != null && !query.trim().isEmpty();
+        if (hasQuery) {
+            sql.append(" AND (content LIKE ? OR keywords LIKE ? "
+                    + "OR tags LIKE ? OR memory_id LIKE ? "
+                    + "OR subject_name LIKE ?)");
+        }
+        if (layer != null) {
+            sql.append(" AND layer = ?");
+        }
+        if (status != null && !status.trim().isEmpty()) {
+            sql.append(" AND status = ?");
+        }
+        sql.append(" ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?");
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement =
+                         connection.prepareStatement(sql.toString())) {
+                int index = 1;
+                if (hasQuery) {
+                    String pattern = "%" + query.trim() + "%";
+                    for (int i = 0; i < 5; i++) {
+                        statement.setString(index++, pattern);
+                    }
+                }
+                if (layer != null) {
+                    statement.setString(index++, layer.dbValue);
+                }
+                if (status != null && !status.trim().isEmpty()) {
+                    statement.setString(index++, status.trim());
+                }
+                statement.setInt(index++, Math.max(1, Math.min(limit, 100000)));
+                statement.setInt(index, Math.max(0, offset));
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        result.add(map(resultSet));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public List<Memory> allMemories() throws SQLException {
+        return search("", null, "", 100000, 0);
+    }
+
+    public void updateAdmin(Memory memory) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_memory SET content = ?, content_hash = ?, "
+                            + "category = ?, keywords = ?, tags = ?, "
+                            + "explicit_important = ?, status = ?, "
+                            + "updated_at = ?, importance = ? WHERE id = ?")) {
+                statement.setString(1, memory.content);
+                statement.setString(2, memory.contentHash);
+                statement.setString(3, memory.category);
+                statement.setString(4, memory.keywords);
+                statement.setString(5, memory.tags);
+                statement.setInt(6, memory.explicitImportant ? 1 : 0);
+                statement.setString(7, memory.status);
+                statement.setLong(8, memory.updatedAt);
+                statement.setDouble(9, memory.importance);
+                statement.setLong(10, memory.id);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public int clearLayer(MemoryLayer layer) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM ai_memory WHERE layer = ?")) {
+                statement.setString(1, layer.dbValue);
+                return statement.executeUpdate();
+            }
+        }
+    }
+
+    public int clearAll() throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM ai_memory")) {
+                return statement.executeUpdate();
+            }
+        }
+    }
+
+    public void deleteHard(String memoryId) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM ai_memory WHERE memory_id = ?")) {
+                statement.setString(1, memoryId);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public long databaseBytes() throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            long pageCount = 0;
+            long pageSize = 0;
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "PRAGMA page_count");
+                 ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    pageCount = result.getLong(1);
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "PRAGMA page_size");
+                 ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    pageSize = result.getLong(1);
+                }
+            }
+            return pageCount * pageSize;
+        }
+    }
+
     public List<Memory> activeByLayer(MemoryLayer layer) throws SQLException {
         List<Memory> result = new ArrayList<>();
         synchronized (database) {

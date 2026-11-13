@@ -88,6 +88,25 @@ public class CoreMemoryStore {
                 entries);
     }
 
+    public void updateCustom(String content) throws SQLException {
+        updateCoreSlot("custom", content);
+    }
+
+    public void updateCoreSlot(String slot, String content) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_core_memory SET content = ?, updated_at = ? "
+                            + "WHERE kind = ? AND slot = ?")) {
+                statement.setString(1, content == null ? "" : content);
+                statement.setLong(2, System.currentTimeMillis());
+                statement.setString(3, KIND_CORE);
+                statement.setString(4, slot);
+                statement.executeUpdate();
+            }
+        }
+    }
+
     private static void upsert(Connection connection,
                                String kind,
                                String slot,

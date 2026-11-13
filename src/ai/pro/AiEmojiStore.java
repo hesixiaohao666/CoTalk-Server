@@ -155,6 +155,55 @@ public class AiEmojiStore {
         return Files.readAllBytes(path);
     }
 
+    public List<AiEmoji> listAll(int limit) throws Exception {
+        List<AiEmoji> result = new ArrayList<>();
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT * FROM ai_emoji ORDER BY created_at DESC LIMIT ?")) {
+                statement.setInt(1, Math.max(1, limit));
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        result.add(map(resultSet));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public void updateTags(String emojiId, String tags) throws Exception {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_emoji SET tags = ?, updated_at = ? "
+                            + "WHERE emoji_id = ?")) {
+                statement.setString(1, tags == null ? "[]" : tags);
+                statement.setLong(2, System.currentTimeMillis());
+                statement.setString(3, emojiId);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public void delete(String emojiId) throws Exception {
+        AiEmoji emoji = findByEmojiId(emojiId);
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM ai_emoji WHERE emoji_id = ?")) {
+                statement.setString(1, emojiId);
+                statement.executeUpdate();
+            }
+        }
+        if (emoji != null && emoji.path != null && !emoji.path.isEmpty()) {
+            Path path = directory.resolve(emoji.path).normalize();
+            if (path.getParent().equals(directory)) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     public void setEnabled(String emojiId, boolean enabled) throws Exception {
         synchronized (database) {
             Connection connection = database.connection();

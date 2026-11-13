@@ -25,6 +25,7 @@ public class ServerSettingsDialog extends JDialog {
 
     private final ServerConfig original;
     private final Path configPath;
+    private final ai.pro.AiProAdminService aiProAdminService;
     private ServerConfig savedConfig;
 
     private final JTextField portField = new JTextField(10);
@@ -88,9 +89,17 @@ public class ServerSettingsDialog extends JDialog {
     public ServerSettingsDialog(Window owner,
                                 ServerConfig config,
                                 Path configPath) {
+        this(owner, config, configPath, null);
+    }
+
+    public ServerSettingsDialog(Window owner,
+                                ServerConfig config,
+                                Path configPath,
+                                ai.pro.AiProAdminService aiProAdminService) {
         super(owner, "CoTalk 服务器设置", ModalityType.APPLICATION_MODAL);
         this.original = config;
         this.configPath = configPath;
+        this.aiProAdminService = aiProAdminService;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setContentPane(buildContent());
         fillFields();
@@ -129,6 +138,10 @@ public class ServerSettingsDialog extends JDialog {
         tabs.addTab("通用", buildGeneralPanel());
         tabs.addTab("管理员（实验性功能）", buildAdminPanel());
         tabs.addTab("AI功能", buildAiPanel());
+        if (aiProAdminService != null) {
+            tabs.addTab("AI Pro管理",
+                    new ai.pro.AiProSettingsPanel(this, aiProAdminService));
+        }
         tabs.addTab("关于", buildAboutPanel());
         content.add(tabs, BorderLayout.CENTER);
 

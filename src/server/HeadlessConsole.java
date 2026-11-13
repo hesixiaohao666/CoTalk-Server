@@ -23,6 +23,7 @@ public final class HeadlessConsole {
 
     private static final Object LOG_LOCK = new Object();
     private static BufferedWriter logWriter;
+    private static volatile String pendingAiproClear;
 
     private HeadlessConsole() {
     }
@@ -151,9 +152,27 @@ public final class HeadlessConsole {
     }
 
     private static void handleCommand(ServerRuntime runtime, String command) {
+        if (pendingAiproClear != null) {
+            String target = pendingAiproClear;
+            pendingAiproClear = null;
+            if (!"yes".equalsIgnoreCase(command)) {
+                log("已取消清空操作");
+                return;
+            }
+            handleAiproClear(runtime, target);
+            return;
+        }
         if ("help".equalsIgnoreCase(command)) {
             log("命令：help | status | members | broadcast <text> | "
-                    + "recall <seq> | ai status | config path | stop");
+                    + "recall <seq> | ai status | aipro stats | "
+                    + "aipro memories [layer] [limit] | aipro clear cache|all | "
+                    + "aipro export <path> | aipro todos | "
+                    + "aipro todo done|cancel <id> | aipro emotion | "
+                    + "config path | stop");
+            return;
+        }
+        if (command.toLowerCase(java.util.Locale.ROOT).startsWith("aipro")) {
+            handleAiproCommand(runtime, command);
             return;
         }
         if ("status".equalsIgnoreCase(command)) {
@@ -213,6 +232,158 @@ public final class HeadlessConsole {
             return;
         }
         log("未知命令：" + command + "，输入 help 查看命令");
+    }
+
+    private static void handleAiproCommand(ServerRuntime runtime,
+                                           String command) {
+        ai.pro.AiProAdminService admin = runtime.getAiProAdminService();
+        if (admin == null) {
+            log("AI Pro 管理服务未初始化");
+            return;
+        }
+        String rest = command.length() <= 5
+                ? "" : command.substring(5).trim();
+        if (rest.isEmpty() || "stats".equalsIgnoreCase(rest)) {
+            log(admin.statsText());
+            return;
+        }
+        if (rest.toLowerCase(java.util.Locale.ROOT).startsWith("memories")) {
+            String[] parts = rest.split("\\s+");
+            String layerValue = parts.length > 1 ? parts[1] : "all";
+            int limit = 20;
+            if (parts.length > 2) {
+                try {
+                    limit = Math.max(1, Integer.parseInt(parts[2]));
+                } catch (NumberFormatException ignored) {
+                    // 默认 20
+                }
+            }
+            ai.pro.MemoryLayer layer = "all".equalsIgnoreCase(layerValue)
+                    ? null : ai.pro.MemoryLayer.fromDb(layerValue);
+            try {
+                java.util.List<ai.pro.Memory> memories =
+                        admin.listMemories("", layer, "", limit, 0);
+                if (memories.isEmpty()) {
+                    log("暂无记忆");
+                } else {
+                    for (ai.pro.Memory memory : memories) {
+                        log(memory.memoryId + " [" + memory.layer.dbValue
+                                + "] 重要度 "
+                                + String.format(java.util.Locale.ROOT,
+                                "%.2f", memory.importance)
+                                + " " + memory.status + "："
+                                + summarize(memory.content));
+                    }
+                }
+            } catch (Exception e) {
+                log("读取记忆失败：" + e.getMessage());
+            }
+            return;
+        }
+        if (rest.toLowerCase(java.util.Locale.ROOT).startsWith("clear ")) {
+            String target = rest.substring(6).trim();
+            if (!"cache".equalsIgnoreCase(target)
+                    && !"all".equalsIgnoreCase(target)) {
+                log("用法：aipro clear cache|all");
+                return;
+            }
+            pendingAiproClear = target.toLowerCase(
+                    java.util.Locale.ROOT);
+            log("确认清空 AI Pro " + target
+                    + " 记忆？再次输入 yes 确认");
+            return;
+        }
+        if (rest.toLowerCase(java.util.Locale.ROOT).startsWith("export ")) {
+            String path = rest.substring(7).trim();
+            if (path.isEmpty()) {
+                log("用法：aipro export <path>");
+                return;
+            }
+            try {
+                Path exported = admin.exportJson(
+                        Paths.get(path), "admin-headless");
+                log("已导出到 " + exported);
+            } catch (Exception e) {
+                log("导出失败：" + e.getMessage());
+            }
+            return;
+        }
+        if ("todos".equalsIgnoreCase(rest)) {
+            try {
+                java.util.List<ai.pro.AiTodo> todos = admin.listTodos(50);
+                if (todos.isEmpty()) {
+                    log("暂无待办");
+                } else {
+                    for (ai.pro.AiTodo todo : todos) {
+                        log(todo.todoId + " " + todo.userName + " "
+                                + todo.status + "："
+                                + summarize(todo.content));
+                    }
+                }
+            } catch (Exception e) {
+                log("读取待办失败：" + e.getMessage());
+            }
+            return;
+        }
+        if (rest.toLowerCase(java.util.Locale.ROOT).startsWith("todo ")) {
+            String[] parts = rest.split("\\s+");
+            if (parts.length < 3) {
+                log("用法：aipro todo done|cancel <id>");
+                return;
+            }
+            try {
+                admin.todoAction(parts[2],
+                        parts[1].toLowerCase(java.util.Locale.ROOT),
+                        0L, "admin-headless");
+                log("待办已更新：" + parts[2]);
+            } catch (Exception e) {
+                log("待办操作失败：" + e.getMessage());
+            }
+            return;
+        }
+        if (rest.toLowerCase(java.util.Locale.ROOT).startsWith("emotion")) {
+            try {
+                if (rest.toLowerCase(java.util.Locale.ROOT)
+                        .contains("reset")) {
+                    admin.resetEmotion("admin-headless");
+                    log("AI Pro 情绪已重置");
+                } else {
+                    log("AI Pro 情绪：" + admin.emotionText());
+                }
+            } catch (Exception e) {
+                log("读取情绪失败：" + e.getMessage());
+            }
+            return;
+        }
+        log("未知 AI Pro 命令：" + rest);
+    }
+
+    private static void handleAiproClear(ServerRuntime runtime, String target) {
+        ai.pro.AiProAdminService admin = runtime.getAiProAdminService();
+        if (admin == null) {
+            log("AI Pro 管理服务未初始化");
+            return;
+        }
+        try {
+            int count;
+            if ("all".equals(target)) {
+                count = admin.clearAll("admin-headless");
+            } else {
+                count = admin.clearLayer(
+                        ai.pro.MemoryLayer.CACHE, "admin-headless");
+            }
+            log("已清空 AI Pro 记忆 " + count + " 条");
+        } catch (Exception e) {
+            log("清空失败：" + e.getMessage());
+        }
+    }
+
+    private static String summarize(String value) {
+        if (value == null) {
+            return "";
+        }
+        String text = value.replace('\n', ' ').trim();
+        return text.length() <= 40 ? text : text.substring(0, 40) + "…";
     }
 
     private static String aiStatus(ServerConfig config) {

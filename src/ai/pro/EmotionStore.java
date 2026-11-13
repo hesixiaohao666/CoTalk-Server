@@ -57,6 +57,19 @@ public class EmotionStore {
         }
     }
 
+    public void reset() throws Exception {
+        EmotionState state = new EmotionState();
+        long now = System.currentTimeMillis();
+        state.mood = "平静";
+        state.valence = 0;
+        state.arousal = 0.2;
+        state.intensity = 0;
+        state.updatedAt = now;
+        state.lastTriggerAt = 0;
+        state.lastDecayAt = now;
+        save(state);
+    }
+
     public void save(EmotionState state) throws Exception {
         synchronized (database) {
             Connection connection = database.connection();

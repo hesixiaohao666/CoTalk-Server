@@ -263,6 +263,18 @@ public class AiProResponder extends DeepSeekAiResponder {
         super.sendReplyMessage(content);
     }
 
+    public void rebuildMemoryIndex() {
+        if (indexManager != null) {
+            indexManager.rebuildQuietly();
+        }
+    }
+
+    public void resetEmotion() {
+        if (emotionEngine != null) {
+            emotionEngine.reset();
+        }
+    }
+
     public String getEmotionStatus() {
         return emotionEngine == null
                 ? "未启用" : emotionEngine.statusText();
