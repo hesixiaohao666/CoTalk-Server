@@ -955,7 +955,8 @@ public class ClientHandler implements Runnable {
             } else {
                 server.schedulePendingDisconnect(member, clientTag);
                 server.getEvents().onLog(member.nickname
-                        + " 连接断开，5 秒内保留在线状态，临时 ID " + member.id);
+                        + " 连接断开，" + config.reconnectGraceMs
+                        + " 毫秒内保留在线状态，临时 ID " + member.id);
             }
         } else {
             server.unregister(this);

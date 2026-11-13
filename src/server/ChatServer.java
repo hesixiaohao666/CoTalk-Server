@@ -31,8 +31,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class ChatServer implements AiReplySink {
 
-    private static final long RECONNECT_GRACE_MS = 5000L;
-
     private static final class PendingDisconnect {
         final Member member;
         final String clientTag;
@@ -182,7 +180,7 @@ public class ChatServer implements AiReplySink {
     }
 
     /**
-     * 断开后 5 秒内保留成员；同 clientTag 重连可复用原成员。
+     * 断开后在配置的宽限时间内保留成员；同 clientTag 重连可复用原成员。
      */
     public void schedulePendingDisconnect(Member member, String clientTag) {
         if (member == null) {
@@ -198,7 +196,7 @@ public class ChatServer implements AiReplySink {
             try {
                 pending.task = pendingScheduler.schedule(
                         () -> expirePending(key, pending),
-                        RECONNECT_GRACE_MS, TimeUnit.MILLISECONDS);
+                        config.reconnectGraceMs, TimeUnit.MILLISECONDS);
             } catch (Exception e) {
                 pendingDisconnects.remove(key, pending);
             }
@@ -262,6 +260,10 @@ public class ChatServer implements AiReplySink {
 
     public ServerConfig getConfig() {
         return config;
+    }
+
+    public long getReconnectGraceMs() {
+        return config.reconnectGraceMs;
     }
 
     public RoomService getRoomService() {

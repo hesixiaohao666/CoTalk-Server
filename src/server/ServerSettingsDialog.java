@@ -29,6 +29,7 @@ public class ServerSettingsDialog extends JDialog {
     private final JTextField maxClientsField = new JTextField(10);
     private final JTextField joinTimeoutField = new JTextField(10);
     private final JTextField heartbeatTimeoutField = new JTextField(10);
+    private final JTextField reconnectGraceField = new JTextField(10);
     private final JTextField roomNameField = new JTextField(24);
     private final JTextField announcementField = new JTextField(24);
     private final JTextField roomAvatarField = new JTextField(24);
@@ -41,6 +42,7 @@ public class ServerSettingsDialog extends JDialog {
     private final JCheckBox featureImageCheck = new JCheckBox("启用图片发送");
     private final JCheckBox featureVoiceCheck = new JCheckBox("启用语音发送");
     private final JCheckBox featureEmojiCheck = new JCheckBox("启用表情包发送");
+    private final JCheckBox pushEnabledCheck = new JCheckBox("启用后台推送");
 
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
     private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
@@ -131,6 +133,8 @@ public class ServerSettingsDialog extends JDialog {
         addRow(panel, row++, "最大连接数", maxClientsField, "大于 0");
         addRow(panel, row++, "加入超时", joinTimeoutField, "毫秒，大于 0");
         addRow(panel, row++, "心跳超时", heartbeatTimeoutField, "毫秒，大于 0");
+        addRow(panel, row++, "重连宽限", reconnectGraceField,
+                "毫秒，5000–60000");
         addRow(panel, row++, "房间名称", roomNameField, null);
         addRow(panel, row++, "房间公告", announcementField, null);
 
@@ -147,6 +151,8 @@ public class ServerSettingsDialog extends JDialog {
                 "关闭后拒绝客户端语音");
         addRow(panel, row++, "表情包发送", featureEmojiCheck,
                 "关闭后拒绝客户端表情包");
+        addRow(panel, row++, "后台推送", pushEnabledCheck,
+                "关闭后客户端不显示本地消息通知");
 
         addRow(panel, row++, "数据库路径", dbPathField, null);
 
@@ -165,7 +171,8 @@ public class ServerSettingsDialog extends JDialog {
         styleField(pathField);
         addRow(panel, row++, "配置文件", pathField, "只读");
         addNote(panel, row,
-                "端口、连接密钥、超时、房间头像、功能开关和 AI 配置修改后需要重启服务才生效。");
+                "端口、连接密钥、超时、重连宽限、后台推送、房间头像、"
+                        + "功能开关和 AI 配置修改后需要重启服务才生效。");
 
         JScrollPane scroll = new JScrollPane(panel);
         scroll.setBorder(null);
@@ -395,7 +402,8 @@ public class ServerSettingsDialog extends JDialog {
     private void styleFields() {
         JTextField[] fields = {
                 portField, maxClientsField, joinTimeoutField,
-                heartbeatTimeoutField, roomNameField, announcementField,
+                heartbeatTimeoutField, reconnectGraceField,
+                roomNameField, announcementField,
                 roomAvatarField, dbPathField, authKeyField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
                 aiMentionsField, aiKeywordsField, aiKeywordChanceField,
@@ -435,6 +443,7 @@ public class ServerSettingsDialog extends JDialog {
         maxClientsField.setText(String.valueOf(original.maxClients));
         joinTimeoutField.setText(String.valueOf(original.joinTimeoutMs));
         heartbeatTimeoutField.setText(String.valueOf(original.heartbeatTimeoutMs));
+        reconnectGraceField.setText(String.valueOf(original.reconnectGraceMs));
         roomNameField.setText(original.roomName);
         announcementField.setText(original.roomAnnouncement);
         roomAvatarField.setText(original.roomAvatar);
@@ -444,6 +453,7 @@ public class ServerSettingsDialog extends JDialog {
         featureImageCheck.setSelected(original.featureImage);
         featureVoiceCheck.setSelected(original.featureVoice);
         featureEmojiCheck.setSelected(original.featureEmoji);
+        pushEnabledCheck.setSelected(original.pushEnabled);
 
         aiEnabledCheck.setSelected(original.aiEnabled);
         aiVisionCheck.setSelected(original.aiVision);
@@ -552,6 +562,8 @@ public class ServerSettingsDialog extends JDialog {
                 String.valueOf(readInt(joinTimeoutField, "加入超时")));
         properties.setProperty("server.heartbeatTimeoutMs",
                 String.valueOf(readInt(heartbeatTimeoutField, "心跳超时")));
+        properties.setProperty("server.reconnectGraceMs",
+                String.valueOf(readInt(reconnectGraceField, "重连宽限")));
         properties.setProperty("room.name", roomName);
         properties.setProperty("room.announcement", text(announcementField));
         properties.setProperty("room.avatar", text(roomAvatarField));
@@ -564,6 +576,8 @@ public class ServerSettingsDialog extends JDialog {
                 String.valueOf(featureVoiceCheck.isSelected()));
         properties.setProperty("features.emoji",
                 String.valueOf(featureEmojiCheck.isSelected()));
+        properties.setProperty("push.enabled",
+                String.valueOf(pushEnabledCheck.isSelected()));
 
         properties.setProperty("ai.enabled",
                 String.valueOf(aiEnabledCheck.isSelected()));
