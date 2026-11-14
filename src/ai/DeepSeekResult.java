@@ -27,7 +27,7 @@ public final class DeepSeekResult {
     }
 
     public boolean isEmptyContent() {
-        return content.trim().isEmpty();
+        return content.strip().isEmpty();
     }
 
     public int contentLength() {

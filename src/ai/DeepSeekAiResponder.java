@@ -25,6 +25,8 @@ public class DeepSeekAiResponder implements AiResponder {
 
     private static final String MANDATORY_FALLBACK = "这个我暂时不能回答，换个话题吧。";
     private static final int MAX_VISION_IMAGES = 2;
+    private static final String SEARCH_INJECTION_PREFIX = "【联网搜索结果】";
+    private static final String MEMORY_INJECTION_PREFIX = "【长期记忆参考";
 
     protected final ServerConfig config;
     private final DeepSeekClient client;
@@ -202,14 +204,30 @@ public class DeepSeekAiResponder implements AiResponder {
                 result = DeepSeekResult.from("");
             }
             if (result.isEmptyContent()) {
-                logEmpty("首次", result);
+                logEmpty("首次", result, activeRequest);
                 result = retryCall(activeRequest, result);
                 if (result.isEmptyContent()) {
-                    logEmpty("重试", result);
-                    if (mandatory) {
-                        sendMandatoryFallback();
+                    logEmpty("重试", result, activeRequest);
+                    List<AiMessage> plainRequest =
+                            withoutInjectedReferences(activeRequest);
+                    if (plainRequest.size() != activeRequest.size()) {
+                        sink.reportError("AI 增强提示空响应，回退普通回答重试");
+                        AiDebugLog.log("fallback=remove-injected-references");
+                        activeRequest = plainRequest;
+                        result = retryCall(activeRequest, result);
+                        if (result.isEmptyContent()) {
+                            logEmpty("回退", result, activeRequest);
+                            if (mandatory) {
+                                sendMandatoryFallback();
+                            }
+                            return;
+                        }
+                    } else {
+                        if (mandatory) {
+                            sendMandatoryFallback();
+                        }
+                        return;
                     }
-                    return;
                 }
             }
             AiReplyParser.ParsedReply reply;
@@ -218,10 +236,16 @@ public class DeepSeekAiResponder implements AiResponder {
             } catch (IllegalArgumentException firstError) {
                 sink.reportError("AI 响应无效，重试一次："
                         + firstError.getMessage());
+                List<AiMessage> repairBase =
+                        withoutInjectedReferences(activeRequest);
+                if (repairBase.size() != activeRequest.size()) {
+                    sink.reportError("AI 移除增强提示后重试修复");
+                    activeRequest = repairBase;
+                }
                 DeepSeekResult repaired = retryCall(
                         buildRetryMessages(activeRequest), result);
                 if (repaired.isEmptyContent()) {
-                    logEmpty("修复", repaired);
+                    logEmpty("修复", repaired, activeRequest);
                     if (mandatory) {
                         sendMandatoryFallback();
                     }
@@ -277,14 +301,45 @@ public class DeepSeekAiResponder implements AiResponder {
         return (int) Math.min(Integer.MAX_VALUE, doubled);
     }
 
-    private void logEmpty(String stage, DeepSeekResult result) {
-        sink.reportError("AI " + stage + "空响应：finish_reason="
+    private void logEmpty(String stage,
+                          DeepSeekResult result,
+                          List<AiMessage> request) {
+        String message = "AI " + stage + "空响应：finish_reason="
                 + safe(result.finishReason)
                 + "，contentLength=" + result.contentLength()
+                + "，trimmedLength=" + result.content.strip().length()
                 + "，reasoningOnly=" + result.reasoningOnly
                 + "，requestId=" + safe(result.requestId)
                 + "，thinking=" + result.thinking
-                + "，maxTokens=" + result.maxTokens);
+                + "，maxTokens=" + result.maxTokens;
+        sink.reportError(message);
+        AiDebugLog.log(message
+                + "，requestMessages=" + request.size()
+                + "，requestChars=" + requestChars(request)
+                + "，searchInjection=" + hasInjection(
+                request, SEARCH_INJECTION_PREFIX)
+                + "，memoryInjection=" + hasInjection(
+                request, MEMORY_INJECTION_PREFIX));
+    }
+
+    private static int requestChars(List<AiMessage> request) {
+        int chars = 0;
+        for (AiMessage message : request) {
+            chars += message.content == null ? 0 : message.content.length();
+        }
+        return chars;
+    }
+
+    private static boolean hasInjection(List<AiMessage> request,
+                                        String prefix) {
+        for (AiMessage message : request) {
+            if ("user".equals(message.role)
+                    && message.content != null
+                    && message.content.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String safe(String value) {
@@ -314,8 +369,27 @@ public class DeepSeekAiResponder implements AiResponder {
         return result;
     }
 
+    /**
+     * 搜索/记忆增强内容可能导致模型空响应或输出异常；
+     * 重试时移除这些注入，保留系统提示、上下文和触发消息。
+     */
+    private static List<AiMessage> withoutInjectedReferences(
+            List<AiMessage> messages) {
+        List<AiMessage> result = new ArrayList<>(messages.size());
+        for (AiMessage message : messages) {
+            if ("user".equals(message.role)
+                    && (message.content.startsWith(SEARCH_INJECTION_PREFIX)
+                    || message.content.startsWith(MEMORY_INJECTION_PREFIX))) {
+                continue;
+            }
+            result.add(message);
+        }
+        return result;
+    }
+
     private void sendMandatoryFallback() {
         sink.reportError("AI 未按强制回复要求输出，使用兜底回复");
+        AiDebugLog.log("fallback=mandatory-message");
         try {
             sink.appendAiMessage(MANDATORY_FALLBACK);
         } catch (Exception e) {
