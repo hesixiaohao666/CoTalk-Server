@@ -23,7 +23,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    private static final String CONFIG_VERSION = "3201";
+    public static final String CONFIG_VERSION = "3201";
 
     public static final class LoadResult {
         public final ServerConfig config;
