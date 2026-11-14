@@ -2,6 +2,7 @@ package ai.pro;
 
 import ai.AiReplySink;
 import model.Attachment;
+import model.Message;
 import server.AttachmentService;
 
 import java.util.ArrayList;
@@ -31,6 +32,40 @@ public class AiEmojiService {
 
     public boolean enabled() {
         return config.getBoolean("ai.pro.emoji.enabled");
+    }
+
+    /**
+     * 自动收集用户发送的表情。返回 null 表示未导入或不满足条件。
+     */
+    public AiEmoji importUserEmoji(Message message) {
+        if (!config.getBoolean("ai.pro.emoji.autoImport")
+                || message == null || !"emoji".equals(message.type)
+                || message.fileId == null || message.fileId.isEmpty()) {
+            return null;
+        }
+        try {
+            AttachmentService.FileData file =
+                    attachmentService.load(message.fileId);
+            if (file == null || file.expired || file.bytes == null
+                    || file.bytes.length == 0) {
+                return null;
+            }
+            int maxBytes = file.attachment.mime != null
+                    && "image/gif".equalsIgnoreCase(file.attachment.mime)
+                    ? config.getInt("ai.pro.emoji.maxGifBytes")
+                    : config.getInt("ai.pro.emoji.maxBytes");
+            if (file.bytes.length > maxBytes
+                    || file.bytes.length > AttachmentService.MAX_ATTACHMENT_BYTES) {
+                return null;
+            }
+            boolean approved = config.getBoolean("ai.pro.emoji.skipReview");
+            return store.importBytes(file.bytes, message.fileName,
+                    file.attachment.mime, message.fileName, "[]",
+                    "user", message.senderId, approved);
+        } catch (Exception e) {
+            sink.reportError("AI Pro 收集用户表情失败：" + e.getMessage());
+            return null;
+        }
     }
 
     public List<AiEmoji> candidates(String mood) {
@@ -91,7 +126,8 @@ public class AiEmojiService {
         }
         try {
             AiEmoji emoji = store.findByEmojiId(emojiId);
-            if (emoji == null || !emoji.enabled) {
+            if (emoji == null || !emoji.enabled
+                    || !"approved".equals(emoji.reviewStatus)) {
                 return false;
             }
             byte[] bytes = store.readBytes(emoji);

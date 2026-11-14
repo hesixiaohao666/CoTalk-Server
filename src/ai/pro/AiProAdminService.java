@@ -76,7 +76,8 @@ public class AiProAdminService {
                     + String.format(java.util.Locale.ROOT, "%.2f",
                     emotion.intensity) + "\n"
                     + "联网搜索：" + AiProSearchService.statusText(
-                    memoryStore, config.aiPro);
+                    memoryStore, config.aiPro) + "\n"
+                    + "表情待审核：" + emojiStore.countPending() + " 个";
         } catch (Exception e) {
             return "统计失败：" + e.getMessage();
         }
@@ -285,6 +286,17 @@ public class AiProAdminService {
         memoryStore.insertAudit(null, "admin_edit", null, null,
                 null, null, operator,
                 (enabled ? "enable emoji " : "disable emoji ") + emojiId,
+                System.currentTimeMillis());
+    }
+
+    public void reviewEmoji(String emojiId,
+                            boolean approved,
+                            String operator) throws Exception {
+        emojiStore.setReviewStatus(emojiId,
+                approved ? "approved" : "rejected", approved);
+        memoryStore.insertAudit(null, "admin_edit", null, null,
+                null, null, operator,
+                (approved ? "approve emoji " : "reject emoji ") + emojiId,
                 System.currentTimeMillis());
     }
 

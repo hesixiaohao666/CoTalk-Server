@@ -12,6 +12,7 @@ public class AiEmoji {
     public String path = "";
     public String tags = "[]";
     public boolean enabled = true;
+    public String reviewStatus = "approved";
     public String source = "admin";
     public String sourceUserId = "";
     public String contentHash = "";

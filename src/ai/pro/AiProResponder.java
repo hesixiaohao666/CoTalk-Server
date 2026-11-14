@@ -5,6 +5,7 @@ import ai.AiMessage;
 import ai.AiReplySink;
 import ai.DeepSeekAiResponder;
 import ai.DeepSeekClient;
+import model.Member;
 import model.Message;
 import server.AttachmentService;
 import server.MessageService;
@@ -167,6 +168,15 @@ public class AiProResponder extends DeepSeekAiResponder {
             pipeline.onMessage(message);
         }
         super.onMessage(sender, message, recentContext);
+    }
+
+    @Override
+    public void onEmojiMessage(Member sender, Message message) {
+        if (emojiService == null || sender == null || message == null
+                || sender.ai) {
+            return;
+        }
+        emojiService.importUserEmoji(message);
     }
 
     @Override

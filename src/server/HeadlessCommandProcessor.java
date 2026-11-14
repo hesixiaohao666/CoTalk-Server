@@ -171,6 +171,8 @@ public final class HeadlessCommandProcessor {
         log("  aipro memory search <text>");
         log("  aipro memory archive|restore <id>");
         log("  aipro memory delete <id>");
+        log("  aipro emojis [limit]");
+        log("  aipro emoji approve|reject <id>");
         log("  aipro clear cache|all");
         log("  aipro export <path>");
         log("  aipro import <path>");
@@ -427,6 +429,12 @@ public final class HeadlessCommandProcessor {
             case "memory":
                 memory(admin, parts);
                 return;
+            case "emojis":
+                emojis(admin, parts);
+                return;
+            case "emoji":
+                emojiReview(admin, parts);
+                return;
             case "clear":
                 clear(parts.length > 1 ? parts[1] : "");
                 return;
@@ -444,8 +452,9 @@ public final class HeadlessCommandProcessor {
                 return;
             default:
                 String suggestion = suggest(sub,
-                        "stats", "memories", "memory", "clear", "export",
-                        "import", "todos", "todo", "emotion", "search");
+                        "stats", "memories", "memory", "emojis", "emoji",
+                        "clear", "export", "import", "todos", "todo",
+                        "emotion", "search");
                 log("未知 AI Pro 命令：" + sub
                         + (suggestion == null ? "" : "，是否想输入 aipro "
                         + suggestion));
@@ -529,6 +538,51 @@ public final class HeadlessCommandProcessor {
                 return;
             default:
                 log("用法：aipro memory search|archive|restore|delete <...>");
+        }
+    }
+
+    private void emojis(AiProAdminService admin, String[] parts) {
+        int limit = 50;
+        if (parts.length > 1) {
+            try {
+                limit = Math.max(1, Math.min(500,
+                        Integer.parseInt(parts[1])));
+            } catch (NumberFormatException e) {
+                log("limit 必须是整数");
+                return;
+            }
+        }
+        try {
+            List<ai.pro.AiEmoji> emojis = admin.listEmojis(limit);
+            if (emojis.isEmpty()) {
+                log("暂无表情");
+                return;
+            }
+            for (ai.pro.AiEmoji emoji : emojis) {
+                log(emoji.emojiId + " [" + emoji.reviewStatus + "] "
+                        + (emoji.enabled ? "启用" : "停用") + " "
+                        + emoji.name);
+            }
+        } catch (Exception e) {
+            log("读取表情失败：" + e.getMessage());
+        }
+    }
+
+    private void emojiReview(AiProAdminService admin, String[] parts) {
+        String action = parts.length > 1
+                ? parts[1].toLowerCase(Locale.ROOT) : "";
+        String id = parts.length > 2 ? parts[2].trim() : "";
+        if (!"approve".equals(action) && !"reject".equals(action)
+                || id.isEmpty()) {
+            log("用法：aipro emoji approve|reject <id>");
+            return;
+        }
+        try {
+            admin.reviewEmoji(id, "approve".equals(action), OPERATOR);
+            log("表情已" + ("approve".equals(action) ? "通过" : "拒绝")
+                    + "：" + id);
+        } catch (Exception e) {
+            log("审核表情失败：" + e.getMessage());
         }
     }
 

@@ -21,5 +21,11 @@ public interface AiResponder {
 
     void onMemberJoined(Member member);
 
+    /**
+     * 用户发送表情后的旁路通知；默认不处理。
+     */
+    default void onEmojiMessage(Member sender, Message message) {
+    }
+
     void shutdown();
 }

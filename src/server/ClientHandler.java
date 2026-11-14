@@ -675,6 +675,9 @@ public class ClientHandler implements Runnable {
             acceptMessage(clientMsgId, message, reqId,
                     previewFor(type, saved.fileName), message.seq);
             attachmentService.requestCleanup();
+            if ("emoji".equals(type)) {
+                server.onEmojiMessage(member, message);
+            }
         } catch (Exception e) {
             if (saved != null && !stored) {
                 attachmentService.delete(saved.fileId);

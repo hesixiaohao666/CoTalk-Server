@@ -601,6 +601,18 @@ public class ChatServer implements AiReplySink {
         }
     }
 
+    public void onEmojiMessage(Member sender, Message message) {
+        AiResponder responder = aiResponder;
+        if (responder == null || !responder.isActive()) {
+            return;
+        }
+        try {
+            responder.onEmojiMessage(sender, message);
+        } catch (Exception e) {
+            events.onLog("AI 表情收集钩子异常：" + e.getMessage());
+        }
+    }
+
     @Override
     public void appendAiMessage(String content) throws Exception {
         if (!running) {
