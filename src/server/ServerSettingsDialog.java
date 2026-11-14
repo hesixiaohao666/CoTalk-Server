@@ -60,14 +60,8 @@ public class ServerSettingsDialog extends JDialog {
 
     private final JCheckBox aiProEnabledCheck =
             new JCheckBox("AI群友Pro（实验性功能）");
-    private final List<JComponent> proOnlyAiRows = new ArrayList<>();
     private final List<JComponent> classicOnlyAiRows = new ArrayList<>();
-    private final JTextField aiProRoundMinutesField = new JTextField(10);
-    private final JTextField aiProRoundMessagesField = new JTextField(10);
-    private final JTextField aiProContextMessagesField = new JTextField(10);
-    private final JTextField aiProPromptMaxCharsField = new JTextField(10);
-    private final JTextField aiProMemoryMaxCharsField = new JTextField(10);
-    private final JTextField aiProOwnerNamesField = new JTextField(24);
+    private final ai.pro.AiProAdvancedPanel aiProAdvancedPanel;
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
     private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
     private final JCheckBox aiSystemMessagesCheck = new JCheckBox("允许 AI 读取系统消息");
@@ -106,6 +100,7 @@ public class ServerSettingsDialog extends JDialog {
         this.original = config;
         this.configPath = configPath;
         this.aiProAdminService = aiProAdminService;
+        this.aiProAdvancedPanel = new ai.pro.AiProAdvancedPanel(config.aiPro);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setContentPane(buildContent());
         fillFields();
@@ -146,7 +141,8 @@ public class ServerSettingsDialog extends JDialog {
         tabs.addTab("AI功能", buildAiPanel());
         if (aiProAdminService != null) {
             tabs.addTab("AI Pro管理",
-                    new ai.pro.AiProSettingsPanel(this, aiProAdminService));
+                    new ai.pro.AiProSettingsPanel(
+                            this, aiProAdminService, aiProAdvancedPanel));
         }
         tabs.addTab("关于", buildAboutPanel());
         content.add(tabs, BorderLayout.CENTER);
@@ -255,19 +251,6 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
         addRow(form, row++, "随机参与概率", aiRandomChanceField, "0–100");
 
-        addRow(form, row++, "Pro 轮次间隔", aiProRoundMinutesField,
-                "分钟，默认 20", proOnlyAiRows);
-        addRow(form, row++, "Pro 轮次消息数", aiProRoundMessagesField,
-                "默认 10 条", proOnlyAiRows);
-        addRow(form, row++, "Pro 上下文条数", aiProContextMessagesField,
-                "默认 10", proOnlyAiRows);
-        addRow(form, row++, "Pro 提示词上限", aiProPromptMaxCharsField,
-                "字符数，默认 6000", proOnlyAiRows);
-        addRow(form, row++, "Pro 记忆预算", aiProMemoryMaxCharsField,
-                "字符数，默认 1200", proOnlyAiRows);
-        addRow(form, row++, "主人昵称", aiProOwnerNamesField,
-                "逗号分隔，可空", proOnlyAiRows);
-
         aiForcedPromptArea.setLineWrap(true);
         aiForcedPromptArea.setWrapStyleWord(true);
         aiForcedPromptArea.setEditable(false);
@@ -296,9 +279,12 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "单条最大字符", aiMessageMaxCharsField, "默认 30");
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 5，最多 10");
         addRow(form, row++, "多条间隔", aiReplyDelayField, "毫秒，默认 600");
-        addNote(form, row,
+        addNote(form, row++,
                 "被 @ 时必须回复；关键词和随机参与按概率触发。"
                         + "修改 AI 配置后需要重启服务。");
+        addNote(form, row,
+                "AI Pro 的轮次、记忆、情绪、表情、待办、搜索等全部参数"
+                        + "位于“AI Pro管理 → 高级选项”。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);
@@ -492,9 +478,6 @@ public class ServerSettingsDialog extends JDialog {
                 roomNameField, announcementField,
                 roomAvatarField, dbPathField, authKeyField,
                 adminKeyField,
-                aiProRoundMinutesField, aiProRoundMessagesField,
-                aiProContextMessagesField, aiProPromptMaxCharsField,
-                aiProMemoryMaxCharsField, aiProOwnerNamesField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
                 aiMentionsField, aiKeywordsField, aiKeywordChanceField,
                 aiRandomChanceField, aiAvatarField, aiCooldownField,
@@ -550,18 +533,6 @@ public class ServerSettingsDialog extends JDialog {
 
         aiProEnabledCheck.setSelected(original.aiProEnabled);
         updateAiModeVisibility();
-        aiProRoundMinutesField.setText(String.valueOf(
-                original.aiPro.getInt("ai.pro.round.intervalMs")
-                        / 60000));
-        aiProRoundMessagesField.setText(String.valueOf(original.aiPro.getInt(
-                "ai.pro.round.messageCount")));
-        aiProContextMessagesField.setText(String.valueOf(original.aiPro.getInt(
-                "ai.pro.prompt.contextMessages")));
-        aiProPromptMaxCharsField.setText(String.valueOf(original.aiPro.getInt(
-                "ai.pro.prompt.maxChars")));
-        aiProMemoryMaxCharsField.setText(String.valueOf(original.aiPro.getInt(
-                "ai.pro.prompt.maxMemoryChars")));
-        aiProOwnerNamesField.setText(original.aiPro.ownerNames());
         aiEnabledCheck.setSelected(original.aiEnabled);
         aiVisionCheck.setSelected(original.aiVision);
         aiSystemMessagesCheck.setSelected(original.aiSystemMessages);
@@ -616,9 +587,6 @@ public class ServerSettingsDialog extends JDialog {
 
     private void updateAiModeVisibility() {
         boolean pro = aiProEnabledCheck.isSelected();
-        for (JComponent component : proOnlyAiRows) {
-            component.setVisible(pro);
-        }
         for (JComponent component : classicOnlyAiRows) {
             component.setVisible(!pro);
         }
@@ -787,26 +755,7 @@ public class ServerSettingsDialog extends JDialog {
 
         properties.setProperty("ai.pro.enabled",
                 String.valueOf(aiProEnabledCheck.isSelected()));
-        int roundMinutes = readInt(aiProRoundMinutesField, "Pro 轮次间隔");
-        if (roundMinutes < 1 || roundMinutes > 1440) {
-            throw new IllegalArgumentException("Pro 轮次间隔必须在 1–1440 分钟之间");
-        }
-        properties.setProperty("ai.pro.round.intervalMs",
-                String.valueOf(roundMinutes * 60000L));
-        properties.setProperty("ai.pro.round.messageCount",
-                String.valueOf(readInt(aiProRoundMessagesField,
-                        "Pro 轮次消息数")));
-        properties.setProperty("ai.pro.prompt.contextMessages",
-                String.valueOf(readInt(aiProContextMessagesField,
-                        "Pro 上下文条数")));
-        properties.setProperty("ai.pro.prompt.maxChars",
-                String.valueOf(readInt(aiProPromptMaxCharsField,
-                        "Pro 提示词上限")));
-        properties.setProperty("ai.pro.prompt.maxMemoryChars",
-                String.valueOf(readInt(aiProMemoryMaxCharsField,
-                        "Pro 记忆预算")));
-        properties.setProperty("ai.pro.owner.names",
-                text(aiProOwnerNamesField));
+        aiProAdvancedPanel.applyTo(properties);
 
         properties.setProperty("ai.enabled",
                 String.valueOf(aiEnabledCheck.isSelected()));

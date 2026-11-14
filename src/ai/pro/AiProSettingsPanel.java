@@ -10,12 +10,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 服务端 AI Pro 管理面板：统计、记忆、待办、表情与核心提示词。
+ * 服务端 AI Pro 管理面板：统计、记忆、待办、表情、核心提示词与高级选项。
  */
 public class AiProSettingsPanel extends JPanel {
 
     private final Window owner;
     private final AiProAdminService admin;
+    private final AiProAdvancedPanel advancedPanel;
     private final JTextArea stats = new JTextArea(4, 40);
     private final DefaultTableModel memoryModel;
     private final JTable memoryTable;
@@ -35,9 +36,16 @@ public class AiProSettingsPanel extends JPanel {
     private final JTextArea redlines = new JTextArea(8, 40);
 
     public AiProSettingsPanel(Window owner, AiProAdminService admin) {
+        this(owner, admin, null);
+    }
+
+    public AiProSettingsPanel(Window owner,
+                              AiProAdminService admin,
+                              AiProAdvancedPanel advancedPanel) {
         super(new BorderLayout(8, 8));
         this.owner = owner;
         this.admin = admin;
+        this.advancedPanel = advancedPanel;
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
         stats.setEditable(false);
@@ -82,6 +90,9 @@ public class AiProSettingsPanel extends JPanel {
         tabs.addTab("待办", buildTodoTab());
         tabs.addTab("表情", buildEmojiTab());
         tabs.addTab("核心提示词", buildCoreTab());
+        if (advancedPanel != null) {
+            tabs.addTab("高级选项", advancedPanel);
+        }
         add(tabs, BorderLayout.CENTER);
         refreshAll();
     }
