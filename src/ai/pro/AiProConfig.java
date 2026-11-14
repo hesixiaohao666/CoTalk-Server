@@ -22,6 +22,8 @@ public final class AiProConfig {
         put("ai.pro.prompt.contextMessages", "10");
         put("ai.pro.prompt.maxChars", "6000");
         put("ai.pro.prompt.maxMemoryChars", "1200");
+        put("ai.pro.time.enabled", "true");
+        put("ai.pro.time.timezone", "");
         put("ai.pro.owner.names", "");
         put("ai.pro.migrate.importHistory", "false");
         put("ai.pro.migrate.backup", "true");
@@ -106,7 +108,8 @@ public final class AiProConfig {
                 "宝贝,亲爱的,想你,抱抱");
 
         put("ai.pro.emoji.enabled", "true");
-        put("ai.pro.emoji.autoImport", "false");
+        put("ai.pro.emoji.autoImport", "true");
+        put("ai.pro.emoji.skipReview", "false");
         put("ai.pro.emoji.cooldownRounds", "5");
         put("ai.pro.emoji.topCandidates", "3");
         put("ai.pro.emoji.candidatePool", "50");
@@ -132,6 +135,17 @@ public final class AiProConfig {
         put("ai.pro.privacy.mode", "drop");
         put("ai.pro.privacy.patterns", "");
         put("ai.pro.privacy.allowPhone", "false");
+
+        put("ai.pro.search.enabled", "false");
+        put("ai.pro.search.dailyLimit", "20");
+        put("ai.pro.search.baseUrl",
+                "https://api.deepseek.com/v1/tools/search");
+        put("ai.pro.search.count", "5");
+        put("ai.pro.search.needContent", "false");
+        put("ai.pro.search.timeoutMs", "10000");
+        put("ai.pro.search.triggers",
+                "最新,今天,现在,新闻,天气,价格,比赛,发布,查询,搜索,查一下");
+        put("ai.pro.search.maxQueryChars", "128");
     }
 
     private final Properties values = new Properties();
@@ -222,6 +236,7 @@ public final class AiProConfig {
         requireInt("ai.pro.prompt.contextMessages", 1, 200);
         requireInt("ai.pro.prompt.maxChars", 500, 100000);
         requireInt("ai.pro.prompt.maxMemoryChars", 0, 100000);
+        requireOptionalZone("ai.pro.time.timezone");
 
         requireInt("ai.pro.round.intervalMs", 1000, Integer.MAX_VALUE);
         requireInt("ai.pro.round.messageCount", 1, 100000);
@@ -301,6 +316,11 @@ public final class AiProConfig {
         requireInt("ai.pro.emoji.maxBytes", 1, 50 * 1024 * 1024);
         requireInt("ai.pro.emoji.maxGifBytes", 1, 100 * 1024 * 1024);
 
+        requireInt("ai.pro.search.dailyLimit", 0, 100000);
+        requireInt("ai.pro.search.count", 1, 20);
+        requireInt("ai.pro.search.timeoutMs", 1000, 60000);
+        requireInt("ai.pro.search.maxQueryChars", 1, 128);
+
         requireInt("ai.pro.todo.maxReminders", 1, 20);
         requireInt("ai.pro.todo.maxRetries", 0, 5);
         requireInt("ai.pro.todo.maxCreatePerRound", 0, 100);
@@ -347,6 +367,18 @@ public final class AiProConfig {
         if (value < min || value > max) {
             throw new IllegalArgumentException(
                     key + " 必须在 " + min + "–" + max + " 之间");
+        }
+    }
+
+    private void requireOptionalZone(String key) {
+        String value = getString(key).trim();
+        if (value.isEmpty()) {
+            return;
+        }
+        try {
+            ZoneId.of(value);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(key + " 时区无效");
         }
     }
 

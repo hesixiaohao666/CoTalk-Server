@@ -23,7 +23,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    private static final String CONFIG_VERSION = "3200";
+    private static final String CONFIG_VERSION = "3201";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -84,6 +84,11 @@ public final class ServerConfigStore {
             newKeysMissing = !loaded.containsKey("ai.keywords")
                     || !loaded.containsKey("ai.keywordChance")
                     || !loaded.containsKey("ai.randomChance")
+                    || !loaded.containsKey("ai.peakChance")
+                    || !loaded.containsKey("ai.offPeakChance")
+                    || !loaded.containsKey("ai.peak.timezone")
+                    || !loaded.containsKey("ai.peak.days")
+                    || !loaded.containsKey("ai.peak.periods")
                     || !loaded.containsKey("room.avatar")
                     || !loaded.containsKey("ai.vision")
                     || !loaded.containsKey("ai.systemMessages")
@@ -219,8 +224,18 @@ public final class ServerConfigStore {
             throw new IllegalArgumentException("AI 消息条数/字数配置非法");
         }
         if (config.aiKeywordChance < 0 || config.aiKeywordChance > 100
-                || config.aiRandomChance < 0 || config.aiRandomChance > 100) {
+                || config.aiRandomChance < 0 || config.aiRandomChance > 100
+                || config.aiPeakChance < 0 || config.aiPeakChance > 100
+                || config.aiOffPeakChance < 0
+                || config.aiOffPeakChance > 100) {
             throw new IllegalArgumentException("AI 参与概率必须在 0–100 之间");
+        }
+        if (!config.aiPeakTimezone.isEmpty()) {
+            try {
+                java.time.ZoneId.of(config.aiPeakTimezone);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("ai.peak.timezone 时区无效");
+            }
         }
         if (config.aiEnabled
                 && (config.aiModel.isEmpty()
@@ -295,6 +310,11 @@ public final class ServerConfigStore {
                 write(writer, properties, "ai.keywords");
                 write(writer, properties, "ai.keywordChance");
                 write(writer, properties, "ai.randomChance");
+                write(writer, properties, "ai.peakChance");
+                write(writer, properties, "ai.offPeakChance");
+                write(writer, properties, "ai.peak.timezone");
+                write(writer, properties, "ai.peak.days");
+                write(writer, properties, "ai.peak.periods");
                 write(writer, properties, "ai.cooldownMs");
                 write(writer, properties, "ai.maxContext");
                 write(writer, properties, "ai.timeoutMs");

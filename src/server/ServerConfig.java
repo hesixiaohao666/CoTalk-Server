@@ -52,6 +52,11 @@ public class ServerConfig {
     public final String aiKeywords;
     public final int aiKeywordChance;
     public final int aiRandomChance;
+    public final int aiPeakChance;
+    public final int aiOffPeakChance;
+    public final String aiPeakTimezone;
+    public final String aiPeakDays;
+    public final String aiPeakPeriods;
     public final int aiCooldownMs;
     public final int aiMaxContext;
     public final int aiTimeoutMs;
@@ -112,8 +117,14 @@ public class ServerConfig {
         aiPromptCustom = customPrompt(properties);
         aiMentions = value(properties, "ai.mentions", "@大肥鱼,@AI");
         aiKeywords = value(properties, "ai.keywords", "大肥鱼,鱼,AI");
-        aiKeywordChance = intValue(properties, "ai.keywordChance", 80);
+        aiKeywordChance = intValue(properties, "ai.keywordChance", 95);
         aiRandomChance = intValue(properties, "ai.randomChance", 20);
+        aiPeakChance = intValue(properties, "ai.peakChance", 20);
+        aiOffPeakChance = intValue(properties, "ai.offPeakChance", 60);
+        aiPeakTimezone = value(properties, "ai.peak.timezone", "");
+        aiPeakDays = value(properties, "ai.peak.days", "MON-FRI");
+        aiPeakPeriods = value(properties, "ai.peak.periods",
+                "09:00-12:00,14:00-18:00");
         aiCooldownMs = intValue(properties, "ai.cooldownMs", 3000);
         aiMaxContext = intValue(properties, "ai.maxContext", 10);
         aiTimeoutMs = intValue(properties, "ai.timeoutMs", 20000);
@@ -171,8 +182,14 @@ public class ServerConfig {
         properties.setProperty("ai.prompt.custom", AiPrompts.DEFAULT_CUSTOM_PROMPT);
         properties.setProperty("ai.mentions", "@大肥鱼,@AI");
         properties.setProperty("ai.keywords", "大肥鱼,鱼,AI");
-        properties.setProperty("ai.keywordChance", "80");
+        properties.setProperty("ai.keywordChance", "95");
         properties.setProperty("ai.randomChance", "20");
+        properties.setProperty("ai.peakChance", "20");
+        properties.setProperty("ai.offPeakChance", "60");
+        properties.setProperty("ai.peak.timezone", "");
+        properties.setProperty("ai.peak.days", "MON-FRI");
+        properties.setProperty("ai.peak.periods",
+                "09:00-12:00,14:00-18:00");
         properties.setProperty("ai.cooldownMs", "3000");
         properties.setProperty("ai.maxContext", "10");
         properties.setProperty("ai.timeoutMs", "20000");
@@ -232,6 +249,12 @@ public class ServerConfig {
         properties.setProperty("ai.keywords", aiKeywords);
         properties.setProperty("ai.keywordChance", String.valueOf(aiKeywordChance));
         properties.setProperty("ai.randomChance", String.valueOf(aiRandomChance));
+        properties.setProperty("ai.peakChance", String.valueOf(aiPeakChance));
+        properties.setProperty("ai.offPeakChance",
+                String.valueOf(aiOffPeakChance));
+        properties.setProperty("ai.peak.timezone", aiPeakTimezone);
+        properties.setProperty("ai.peak.days", aiPeakDays);
+        properties.setProperty("ai.peak.periods", aiPeakPeriods);
         properties.setProperty("ai.cooldownMs", String.valueOf(aiCooldownMs));
         properties.setProperty("ai.maxContext", String.valueOf(aiMaxContext));
         properties.setProperty("ai.timeoutMs", String.valueOf(aiTimeoutMs));

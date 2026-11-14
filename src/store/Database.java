@@ -14,7 +14,7 @@ import java.sql.Statement;
  */
 public class Database implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 3200;
+    private static final int SCHEMA_VERSION = 3201;
 
     private final String path;
     private Connection connection;
@@ -109,6 +109,10 @@ public class Database implements AutoCloseable {
                     + "ON attachment(file_name)");
 
             createAiProTables(statement);
+
+            // v3200 -> v3201：用户表情增加审核状态；旧数据默认视为已审核。
+            addColumnIfMissing(statement, "ai_emoji", "review_status",
+                    "TEXT NOT NULL DEFAULT 'approved'");
 
             // v1 -> v2：旧库补齐消息附件字段；全新库的建表语句已包含这些列。
             addColumnIfMissing(statement, "message", "file_id", "TEXT");
@@ -232,6 +236,7 @@ public class Database implements AutoCloseable {
                 + "path TEXT NOT NULL, "
                 + "tags TEXT NOT NULL DEFAULT '[]', "
                 + "enabled INTEGER NOT NULL DEFAULT 1, "
+                + "review_status TEXT NOT NULL DEFAULT 'approved', "
                 + "source TEXT NOT NULL, "
                 + "source_user_id TEXT, "
                 + "content_hash TEXT NOT NULL UNIQUE, "

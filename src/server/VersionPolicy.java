@@ -1,7 +1,7 @@
 package server;
 
 /**
- * v0.3.5 协议与客户端版本策略。客户端版本区间以客户端 versionCode 为准。
+ * v0.3.6 协议与客户端版本策略。客户端版本区间以客户端 versionCode 为准。
  */
 public final class VersionPolicy {
 
