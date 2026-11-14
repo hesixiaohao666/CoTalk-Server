@@ -25,4 +25,26 @@ public interface DeepSeekClient {
                                   boolean thinking) throws Exception {
         return chatCompletion(messages, maxTokens);
     }
+
+    /**
+     * 带 finish_reason/requestId 等元信息的调用；旧实现通过 content 自动包装。
+     */
+    default DeepSeekResult chatCompletionResult(List<AiMessage> messages)
+            throws Exception {
+        return DeepSeekResult.from(chatCompletion(messages));
+    }
+
+    default DeepSeekResult chatCompletionResult(List<AiMessage> messages,
+                                                int maxTokens)
+            throws Exception {
+        return DeepSeekResult.from(chatCompletion(messages, maxTokens));
+    }
+
+    default DeepSeekResult chatCompletionResult(List<AiMessage> messages,
+                                                int maxTokens,
+                                                boolean thinking)
+            throws Exception {
+        return DeepSeekResult.from(
+                chatCompletion(messages, maxTokens, thinking));
+    }
 }

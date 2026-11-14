@@ -30,20 +30,43 @@ public class DeepSeekHttpClient implements DeepSeekClient {
 
     @Override
     public String chatCompletion(List<AiMessage> messages) throws Exception {
-        return chatCompletion(messages, effectiveMaxTokens(),
-                config.aiThinking);
+        return chatCompletionResult(messages).content;
     }
 
     @Override
     public String chatCompletion(List<AiMessage> messages, int maxTokens)
             throws Exception {
-        return chatCompletion(messages, maxTokens, config.aiThinking);
+        return chatCompletionResult(messages, maxTokens).content;
     }
 
     @Override
     public String chatCompletion(List<AiMessage> messages,
                                  int maxTokens,
                                  boolean thinkingEnabled)
+            throws Exception {
+        return chatCompletionResult(messages, maxTokens,
+                thinkingEnabled).content;
+    }
+
+    @Override
+    public DeepSeekResult chatCompletionResult(List<AiMessage> messages)
+            throws Exception {
+        return chatCompletionResult(messages, effectiveMaxTokens(),
+                config.aiThinking);
+    }
+
+    @Override
+    public DeepSeekResult chatCompletionResult(List<AiMessage> messages,
+                                               int maxTokens)
+            throws Exception {
+        return chatCompletionResult(messages, maxTokens,
+                config.aiThinking);
+    }
+
+    @Override
+    public DeepSeekResult chatCompletionResult(List<AiMessage> messages,
+                                               int maxTokens,
+                                               boolean thinkingEnabled)
             throws Exception {
         JsonObject body = new JsonObject();
         body.addProperty("model", effectiveModel());
@@ -124,11 +147,27 @@ public class DeepSeekHttpClient implements DeepSeekClient {
             throw new IllegalStateException("DeepSeek 响应缺少 message");
         }
         JsonObject message = choice.getAsJsonObject("message");
-        if (!message.has("content") || message.get("content").isJsonNull()) {
-            throw new IllegalStateException("DeepSeek 响应缺少 content");
+        String content = "";
+        if (message.has("content") && !message.get("content").isJsonNull()) {
+            content = message.get("content").getAsString();
         }
-        // 只读取最终 content；reasoning_content 即使返回也直接忽略。
-        return message.get("content").getAsString();
+        boolean reasoningOnly = content.trim().isEmpty()
+                && message.has("reasoning_content")
+                && !message.get("reasoning_content").isJsonNull()
+                && !message.get("reasoning_content").getAsString()
+                .trim().isEmpty();
+        String finishReason = choice.has("finish_reason")
+                && !choice.get("finish_reason").isJsonNull()
+                ? choice.get("finish_reason").getAsString() : "";
+        String requestId = response.headers().firstValue("x-request-id")
+                .orElse("");
+        if (requestId.isEmpty() && root.has("id")
+                && !root.get("id").isJsonNull()) {
+            requestId = root.get("id").getAsString();
+        }
+        int usedTokens = maxTokens > 0 ? maxTokens : effectiveMaxTokens();
+        return new DeepSeekResult(content, finishReason, requestId,
+                reasoningOnly, usedTokens, thinkingEnabled);
     }
 
     private String effectiveModel() {

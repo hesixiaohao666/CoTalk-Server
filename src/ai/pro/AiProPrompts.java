@@ -14,10 +14,7 @@ public final class AiProPrompts {
 
     static {
         LinkedHashMap<String, String> redlines = new LinkedHashMap<>();
-        redlines.put("system_protocol",
-                "只输出 JSON 对象，不输出推理、解释或 Markdown；"
-                        + "严格输出 {\"send\":true,\"messages\":[\"短消息1\"]}；"
-                        + "不发送时输出 {\"send\":false,\"messages\":[]}。");
+        redlines.put("system_protocol", ai.AiJsonContract.OUTPUT_RULE);
         redlines.put("legal",
                 "遵守法律法规和公序良俗；不得生成或协助违法、暴力、色情、"
                         + "仇恨、歧视、诈骗、侵犯隐私等内容；遇到此类请求必须"
@@ -102,7 +99,10 @@ public final class AiProPrompts {
                 .append("\n【输出限制】\n")
                 .append("- 每条最多 ").append(maxChars).append(" 字符，最多 ")
                 .append(maxMessages).append(" 条。\n")
-                .append("- 只输出 JSON 对象，不输出解释、推理或 Markdown。");
+                .append("- 必须返回非空 JSON；即使不发送也必须返回 ")
+                .append(ai.AiJsonContract.NO_SEND_EXAMPLE)
+                .append("；不得返回空字符串。\n")
+                .append("- 只输出 JSON 对象，不输出解释、推理、Markdown 或代码块。");
         return builder.toString();
     }
 }

@@ -179,9 +179,9 @@ public class DeepSeekAiResponder implements AiResponder {
             List<AiMessage> request = buildRequestMessages(
                     mergedMessages, context, mandatory);
             List<AiMessage> activeRequest = request;
-            String raw;
+            DeepSeekResult result;
             try {
-                raw = client.chatCompletion(activeRequest);
+                result = client.chatCompletionResult(activeRequest);
             } catch (Exception firstError) {
                 if (!containsImages(activeRequest)) {
                     throw firstError;
@@ -189,15 +189,38 @@ public class DeepSeekAiResponder implements AiResponder {
                 sink.reportError("AI 识图请求失败，回退纯文本："
                         + firstError.getMessage());
                 activeRequest = withoutImages(activeRequest);
-                raw = client.chatCompletion(activeRequest);
+                result = client.chatCompletionResult(activeRequest);
+            }
+            if (result == null) {
+                result = DeepSeekResult.from("");
+            }
+            if (result.isEmptyContent()) {
+                logEmpty("首次", result);
+                result = retryCall(activeRequest, result);
+                if (result.isEmptyContent()) {
+                    logEmpty("重试", result);
+                    if (mandatory) {
+                        sendMandatoryFallback();
+                    }
+                    return;
+                }
             }
             AiReplyParser.ParsedReply reply;
             try {
-                reply = replyParser.parse(raw);
+                reply = replyParser.parse(result.content);
             } catch (IllegalArgumentException firstError) {
-                sink.reportError("AI 响应无效，重试一次：" + firstError.getMessage());
-                raw = client.chatCompletion(buildRetryMessages(activeRequest));
-                reply = replyParser.parse(raw);
+                sink.reportError("AI 响应无效，重试一次："
+                        + firstError.getMessage());
+                DeepSeekResult repaired = retryCall(
+                        buildRetryMessages(activeRequest), result);
+                if (repaired.isEmptyContent()) {
+                    logEmpty("修复", repaired);
+                    if (mandatory) {
+                        sendMandatoryFallback();
+                    }
+                    return;
+                }
+                reply = replyParser.parse(repaired.content);
             }
             if (reply == null || !reply.send || reply.messages.isEmpty()) {
                 if (mandatory) {
@@ -232,9 +255,38 @@ public class DeepSeekAiResponder implements AiResponder {
         }
     }
 
+    private DeepSeekResult retryCall(List<AiMessage> request,
+                                     DeepSeekResult previous)
+            throws Exception {
+        DeepSeekResult result = client.chatCompletionResult(
+                request, retryMaxTokens(previous), false);
+        return result == null ? DeepSeekResult.from("") : result;
+    }
+
+    private int retryMaxTokens(DeepSeekResult previous) {
+        int base = previous != null && previous.maxTokens > 0
+                ? previous.maxTokens : config.aiMaxTokens;
+        long doubled = Math.max((long) base * 2, 800L);
+        return (int) Math.min(Integer.MAX_VALUE, doubled);
+    }
+
+    private void logEmpty(String stage, DeepSeekResult result) {
+        sink.reportError("AI " + stage + "空响应：finish_reason="
+                + safe(result.finishReason)
+                + "，contentLength=" + result.contentLength()
+                + "，reasoningOnly=" + result.reasoningOnly
+                + "，requestId=" + safe(result.requestId)
+                + "，thinking=" + result.thinking
+                + "，maxTokens=" + result.maxTokens);
+    }
+
+    private static String safe(String value) {
+        return value == null || value.trim().isEmpty() ? "-" : value.trim();
+    }
+
     private List<AiMessage> buildRetryMessages(List<AiMessage> request) {
         List<AiMessage> retry = new ArrayList<>(request);
-        retry.add(new AiMessage("user", AiPrompts.REPAIR_INSTRUCTION));
+        retry.add(new AiMessage("user", AiJsonContract.REPAIR_INSTRUCTION));
         return retry;
     }
 

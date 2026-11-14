@@ -6,21 +6,17 @@ package ai;
 public final class AiPrompts {
 
     public static final String JSON_FORMAT_HINT =
-            "必须严格输出 json 对象：{\"send\":true,\"messages\":[\"短消息1\",\"短消息2\"]}；"
-                    + "不想发送时输出 {\"send\":false,\"messages\":[]}。";
+            AiJsonContract.FORMAT_HINT;
 
     public static final String FORCED_PROMPT =
             "你是 CoTalk 群聊中的 AI 群友。必须使用简体中文，语气礼貌、简洁、自然，不冒充人类。"
                     + "必须遵守法律法规和公序良俗，不得生成或协助违法、暴力、色情、"
                     + "仇恨、歧视、诈骗、侵犯隐私等内容；遇到此类请求必须明确拒绝，"
                     + "不提供规避建议。"
-                    + "只输出 json 对象，不输出推理、解释或 Markdown。"
-                    + JSON_FORMAT_HINT;
+                    + AiJsonContract.OUTPUT_RULE;
 
     public static final String REPAIR_INSTRUCTION =
-            "上一次输出为空或不是合法格式。请重新回答，并且只输出一个 json 对象，"
-                    + "不要输出空内容、推理、解释或 Markdown。"
-                    + JSON_FORMAT_HINT;
+            AiJsonContract.REPAIR_INSTRUCTION;
 
     public static final String DEFAULT_CUSTOM_PROMPT =
             "你是“大肥鱼”，性格活泼、幽默，喜欢摸鱼，说话简短自然。"
@@ -53,6 +49,8 @@ public final class AiPrompts {
                 + rule
                 + "\n\n【输出限制】每条最多" + maxChars
                 + "个字符，最多" + maxMessages
-                + "条；只输出 JSON 对象，不要输出解释。";
+                + "条；必须返回非空 JSON，即使不发送也必须返回 "
+                + AiJsonContract.NO_SEND_EXAMPLE
+                + "；不得返回空字符串。";
     }
 }
