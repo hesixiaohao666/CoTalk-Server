@@ -410,10 +410,6 @@ public final class HeadlessCommandProcessor {
             search(parts.length > 1 ? parts[1] : "status");
             return;
         }
-        if ("import".equals(sub)) {
-            importMemory(value);
-            return;
-        }
         AiProAdminService admin = admin();
         if (admin == null) {
             return;
@@ -440,6 +436,9 @@ public final class HeadlessCommandProcessor {
                 return;
             case "export":
                 export(admin, value);
+                return;
+            case "import":
+                importMemory(admin, value);
                 return;
             case "todos":
                 todos(admin);
@@ -629,14 +628,21 @@ public final class HeadlessCommandProcessor {
         }
     }
 
-    private void importMemory(String value) {
+    private void importMemory(AiProAdminService admin, String value) {
         String path = value.length() <= "import".length()
                 ? "" : value.substring("import".length()).trim();
         if (path.isEmpty()) {
             log("用法：aipro import <path>");
             return;
         }
-        log("当前版本暂不支持记忆导入。");
+        try {
+            ai.pro.AiProImportExport.ImportResult result = admin.importJson(
+                    Path.of(path), OPERATOR);
+            log("记忆导入完成：新增 " + result.imported
+                    + " 条，跳过重复 " + result.skipped + " 条");
+        } catch (Exception e) {
+            log("记忆导入失败：" + e.getMessage());
+        }
     }
 
     private void todos(AiProAdminService admin) {

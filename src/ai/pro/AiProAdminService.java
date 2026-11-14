@@ -1,17 +1,13 @@
 package ai.pro;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Message;
 import server.ServerConfig;
 import store.Database;
 import util.JsonUtil;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -214,20 +210,21 @@ public class AiProAdminService {
     }
 
     public Path exportJson(Path path, String operator) throws Exception {
-        Path absolute = path.toAbsolutePath();
-        if (absolute.getParent() != null) {
-            Files.createDirectories(absolute.getParent());
-        }
-        JsonArray array = new JsonArray();
-        for (Memory memory : memoryStore.allMemories()) {
-            array.add(memoryJson(memory));
-        }
-        Files.writeString(absolute, JsonUtil.stringify(array),
-                StandardCharsets.UTF_8);
+        List<Memory> memories = memoryStore.allMemories();
+        Path absolute = AiProImportExport.export(path, memories);
         memoryStore.insertAudit(null, "export", null, null,
-                null, null, operator, "export " + array.size(),
+                null, null, operator, "export " + memories.size(),
                 System.currentTimeMillis());
         return absolute;
+    }
+
+    public AiProImportExport.ImportResult importJson(Path path,
+                                                     String operator)
+            throws Exception {
+        AiProImportExport.ImportResult result =
+                AiProImportExport.importFile(path, memoryStore, operator);
+        rebuildIndex();
+        return result;
     }
 
     public CoreMemory coreMemory() throws Exception {
@@ -371,34 +368,7 @@ public class AiProAdminService {
     }
 
     private static JsonObject memoryJson(Memory memory) {
-        JsonObject json = new JsonObject();
-        json.addProperty("memoryId", memory.memoryId);
-        json.addProperty("layer", memory.layer.dbValue);
-        json.addProperty("status", memory.status);
-        json.addProperty("category", memory.category);
-        json.addProperty("content", memory.content);
-        json.addProperty("keywords", memory.keywords);
-        json.addProperty("tags", memory.tags);
-        json.addProperty("subjectId", memory.subjectId);
-        json.addProperty("subjectName", memory.subjectName);
-        json.addProperty("source", memory.source.dbValue);
-        json.addProperty("sourceTrust", memory.sourceTrust);
-        json.addProperty("explicitImportant", memory.explicitImportant);
-        json.addProperty("accessCount", memory.accessCount);
-        json.addProperty("taskRelevance", memory.taskRelevance);
-        json.addProperty("emotionalSalience", memory.emotionalSalience);
-        json.addProperty("reconstructability", memory.reconstructability);
-        json.addProperty("redundancy", memory.redundancy);
-        json.addProperty("importance", memory.importance);
-        json.addProperty("confidence", memory.confidence);
-        json.addProperty("expiresAt", memory.expiresAt);
-        json.addProperty("mergedInto", memory.mergedInto);
-        json.addProperty("auditNote", memory.auditNote);
-        json.addProperty("createdAt", memory.createdAt);
-        json.addProperty("updatedAt", memory.updatedAt);
-        json.addProperty("lastAccessAt", memory.lastAccessAt);
-        json.addProperty("stableSince", memory.stableSince);
-        return json;
+        return AiProImportExport.memoryJson(memory);
     }
 
     private static String truncate(String value) {

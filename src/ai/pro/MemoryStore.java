@@ -112,6 +112,19 @@ public class MemoryStore {
         }
     }
 
+    public Memory findByHashAny(String hash) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT * FROM ai_memory WHERE content_hash = ? LIMIT 1")) {
+                statement.setString(1, hash);
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next() ? map(result) : null;
+                }
+            }
+        }
+    }
+
     public Memory findByMemoryId(String memoryId) throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();

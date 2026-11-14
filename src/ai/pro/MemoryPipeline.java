@@ -133,9 +133,7 @@ public class MemoryPipeline {
     }
 
     public void onMessage(Message message) {
-        if (closed || message == null
-                || "system".equals(message.type)
-                || ai.AiResponder.AI_USER_ID.equals(message.senderId)) {
+        if (closed || message == null) {
             return;
         }
         int pending = pendingMessages.incrementAndGet();
@@ -223,22 +221,27 @@ public class MemoryPipeline {
                 return;
             }
             toSeq = window.get(window.size() - 1).seq;
+            List<Message> windowMessages = new ArrayList<>();
             List<Message> human = new ArrayList<>();
             for (Message message : window) {
-                if (message == null || "system".equals(message.type)
-                        || ai.AiResponder.AI_USER_ID.equals(message.senderId)) {
+                if (message == null) {
                     continue;
                 }
-                human.add(message);
+                windowMessages.add(message);
+                if (!"system".equals(message.type)
+                        && !ai.AiResponder.AI_USER_ID.equals(
+                        message.senderId)) {
+                    human.add(message);
+                }
             }
-            if (human.size() < config.getInt(
+            if (windowMessages.size() < config.getInt(
                     "ai.pro.round.minMessages")) {
-                finishRound(startedAt, type, fromSeq, toSeq, human.size(),
-                        0, 0, 0, "skipped", "");
+                finishRound(startedAt, type, fromSeq, toSeq,
+                        windowMessages.size(), 0, 0, 0, "skipped", "");
                 return;
             }
 
-            List<AiMessage> request = extractor.buildMessages(human);
+            List<AiMessage> request = extractor.buildMessages(windowMessages);
             String raw = client.chatCompletion(
                     request,
                     config.getInt("ai.pro.extract.maxTokens"),
@@ -324,8 +327,9 @@ public class MemoryPipeline {
                 }
             }
 
-            finishRound(startedAt, type, fromSeq, toSeq, human.size(),
-                    extractedCount, inserted, merged, "ok", "");
+            finishRound(startedAt, type, fromSeq, toSeq,
+                    windowMessages.size(), extractedCount, inserted,
+                    merged, "ok", "");
             try {
                 long roundNumber = parseLong(
                         store.getMeta("round_count", "0"), 0);
@@ -395,7 +399,9 @@ public class MemoryPipeline {
         memory.subjectName = candidate.subject;
         memory.source = remapSource(candidate, confirmed);
         memory.sourceTrust = memory.source.trust;
-        memory.explicitImportant = candidate.explicit
+        boolean lowTrust = memory.source == MemorySource.AI_SELF
+                || memory.source == MemorySource.SYSTEM_EVENT;
+        memory.explicitImportant = !lowTrust && candidate.explicit
                 && (explicitTrigger || memory.source == MemorySource.ADMIN);
         if (memory.explicitImportant
                 && (explicitTrigger || memory.source == MemorySource.ADMIN)) {
@@ -420,6 +426,10 @@ public class MemoryPipeline {
                                      boolean confirmed) {
         if (candidate.source == MemorySource.ADMIN) {
             return MemorySource.ADMIN;
+        }
+        if (candidate.source == MemorySource.AI_SELF
+                || candidate.source == MemorySource.SYSTEM_EVENT) {
+            return candidate.source;
         }
         if (candidate.source == MemorySource.USER_CONFIRMED && confirmed) {
             return MemorySource.USER_CONFIRMED;

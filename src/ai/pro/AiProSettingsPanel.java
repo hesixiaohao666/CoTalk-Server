@@ -111,6 +111,7 @@ public class AiProSettingsPanel extends JPanel {
         JButton delete = new JButton("删除");
         JButton clear = new JButton("清空当前层");
         JButton export = new JButton("导出 JSON");
+        JButton importButton = new JButton("导入 JSON");
         refresh.addActionListener(e -> refreshMemories());
         add.addActionListener(e -> addMemory());
         edit.addActionListener(e -> editMemory());
@@ -118,6 +119,7 @@ public class AiProSettingsPanel extends JPanel {
         delete.addActionListener(e -> deleteMemory());
         clear.addActionListener(e -> clearMemoryLayer());
         export.addActionListener(e -> exportMemories());
+        importButton.addActionListener(e -> importMemories());
         top.add(refresh);
         top.add(add);
         top.add(edit);
@@ -125,6 +127,7 @@ public class AiProSettingsPanel extends JPanel {
         top.add(delete);
         top.add(clear);
         top.add(export);
+        top.add(importButton);
         panel.add(top, BorderLayout.NORTH);
         panel.add(new JScrollPane(memoryTable), BorderLayout.CENTER);
         return panel;
@@ -360,6 +363,26 @@ public class AiProSettingsPanel extends JPanel {
                     "导出完成", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             error("导出失败", e);
+        }
+    }
+
+    private void importMemories() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "AI Pro 记忆 JSON", "json"));
+        if (chooser.showOpenDialog(owner) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        try {
+            ai.pro.AiProImportExport.ImportResult result = admin.importJson(
+                    chooser.getSelectedFile().toPath(), "admin-gui");
+            JOptionPane.showMessageDialog(owner,
+                    "导入完成：新增 " + result.imported
+                            + " 条，跳过重复 " + result.skipped + " 条。",
+                    "导入完成", JOptionPane.INFORMATION_MESSAGE);
+            refreshAll();
+        } catch (Exception e) {
+            error("导入失败", e);
         }
     }
 

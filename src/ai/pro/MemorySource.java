@@ -8,6 +8,8 @@ public enum MemorySource {
     USER_CONFIRMED("user_confirmed", 0.8),
     USER_STATEMENT("user_statement", 0.6),
     GROUP_MEMBER("group_member", 0.4),
+    AI_SELF("ai_self", 0.25),
+    SYSTEM_EVENT("system_event", 0.2),
     AI_INFERENCE("ai_inference", 0.3);
 
     public final String dbValue;
