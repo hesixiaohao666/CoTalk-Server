@@ -74,7 +74,9 @@ public class AiProAdminService {
                     + "，下次 " + formatTime(nextRound) + "\n"
                     + "情绪：" + emotion.mood + "，强度 "
                     + String.format(java.util.Locale.ROOT, "%.2f",
-                    emotion.intensity);
+                    emotion.intensity) + "\n"
+                    + "联网搜索：" + AiProSearchService.statusText(
+                    memoryStore, config.aiPro);
         } catch (Exception e) {
             return "统计失败：" + e.getMessage();
         }
@@ -307,6 +309,17 @@ public class AiProAdminService {
         return state.mood + "，强度 "
                 + String.format(java.util.Locale.ROOT, "%.2f",
                 state.intensity);
+    }
+
+    public String searchStatusText() {
+        return AiProSearchService.statusText(memoryStore, config.aiPro);
+    }
+
+    public void resetSearchQuota(String operator) throws Exception {
+        AiProSearchService.resetQuota(memoryStore, config.aiPro);
+        memoryStore.insertAudit(null, "admin_edit", null, null,
+                null, null, operator, "reset search quota",
+                System.currentTimeMillis());
     }
 
     public void resetEmotion(String operator) throws Exception {

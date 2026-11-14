@@ -658,16 +658,32 @@ public final class HeadlessCommandProcessor {
     private void search(String value) {
         String action = value == null || value.trim().isEmpty()
                 ? "status" : value.trim().toLowerCase(Locale.ROOT);
+        AiProAdminService admin = runtime.getAiProAdminService();
         if ("status".equals(action)) {
-            boolean enabled = config.getBoolean("ai.pro.search.enabled");
-            int limit = config.getInt("ai.pro.search.dailyLimit");
-            log("联网搜索：" + (enabled ? "已启用" : "未启用")
-                    + "，每日额度：" + limit
-                    + "，地址：" + config.get("ai.pro.search.baseUrl"));
+            if (admin != null) {
+                log("联网搜索：" + admin.searchStatusText()
+                        + "，地址：" + config.get("ai.pro.search.baseUrl"));
+            } else {
+                boolean enabled = config.getBoolean(
+                        "ai.pro.search.enabled");
+                int limit = config.getInt("ai.pro.search.dailyLimit");
+                log("联网搜索：" + (enabled ? "已启用" : "未启用")
+                        + "，每日额度：" + limit
+                        + "，地址：" + config.get("ai.pro.search.baseUrl"));
+            }
             return;
         }
         if ("reset".equals(action)) {
-            log("当前版本暂不支持搜索额度重置。");
+            if (admin == null) {
+                log("AI Pro 管理服务未初始化");
+                return;
+            }
+            try {
+                admin.resetSearchQuota(OPERATOR);
+                log("联网搜索今日额度已重置");
+            } catch (Exception e) {
+                log("重置搜索额度失败：" + e.getMessage());
+            }
             return;
         }
         log("用法：aipro search status|reset");

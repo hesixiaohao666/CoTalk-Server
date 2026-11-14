@@ -34,6 +34,7 @@ public class AiProResponder extends DeepSeekAiResponder {
     private final EmotionEngine emotionEngine;
     private final AiEmojiService emojiService;
     private final AiTodoService todoService;
+    private final AiProSearchService searchService;
     private static final Pattern EMOJI_TOKEN = Pattern.compile(
             "\\[\\[emoji:([A-Za-z0-9_-]+)]]");
 
@@ -95,6 +96,9 @@ public class AiProResponder extends DeepSeekAiResponder {
                 }
             }
             this.emojiService = emojis;
+            this.searchService = new AiProSearchService(
+                    config, memoryStore, new AiProSearchClient(config),
+                    sink::reportError);
             this.pipeline = new MemoryPipeline(
                     database, messageService, client,
                     config.aiPro, sink, memoryStore, indexManager,
@@ -107,6 +111,7 @@ public class AiProResponder extends DeepSeekAiResponder {
             this.emotionEngine = null;
             this.todoService = null;
             this.emojiService = null;
+            this.searchService = null;
             this.pipeline = null;
         }
     }
@@ -129,7 +134,11 @@ public class AiProResponder extends DeepSeekAiResponder {
                 ? "" : emotionEngine.getState().mood;
         String emoji = emojiService == null
                 ? "" : emojiService.promptSection(mood);
-        String extra = emotion;
+        String time = AiProTime.promptSection(config.aiPro);
+        String extra = time;
+        if (!emotion.isEmpty()) {
+            extra = extra.isEmpty() ? emotion : extra + "\n\n" + emotion;
+        }
         if (!emoji.isEmpty()) {
             extra = extra.isEmpty() ? emoji : extra + "\n\n" + emoji;
         }
@@ -164,20 +173,41 @@ public class AiProResponder extends DeepSeekAiResponder {
     protected List<AiMessage> buildExtraUserMessages(
             List<String> mergedMessages,
             List<Message> context) {
-        if (retriever == null || indexManager == null
-                || memoryStore == null) {
-            return Collections.emptyList();
-        }
         String query = buildQuery(mergedMessages, context);
         if (query.trim().isEmpty()) {
             return Collections.emptyList();
+        }
+
+        List<AiMessage> result = new ArrayList<>();
+        if (searchService != null) {
+            String triggerText = mergedMessages == null
+                    ? "" : String.join("\n", mergedMessages);
+            String searchQuery = buildSearchQuery(mergedMessages, context);
+            AiProSearchService.SearchOutcome search =
+                    searchService.searchIfNeeded(searchQuery, triggerText);
+            if (search.hasNotice()) {
+                try {
+                    sink.appendAiMessage(search.notice);
+                } catch (Exception e) {
+                    sink.reportError("AI Pro 搜索额度提示发送失败："
+                            + e.getMessage());
+                }
+            }
+            if (search.hasInjection()) {
+                result.add(new AiMessage("user", search.injection));
+            }
+        }
+
+        if (retriever == null || indexManager == null
+                || memoryStore == null) {
+            return result;
         }
         Set<String> tags = queryTags(query);
         long now = System.currentTimeMillis();
         List<MemoryRetriever.Retrieved> retrieved = retriever.retrieve(
                 query, tags, config.aiPro, indexManager.get(), now);
         if (retrieved.isEmpty()) {
-            return Collections.emptyList();
+            return result;
         }
         Set<String> ids = new HashSet<>();
         for (MemoryRetriever.Retrieved item : retrieved) {
@@ -189,12 +219,40 @@ public class AiProResponder extends DeepSeekAiResponder {
             sink.reportError("AI Pro 更新记忆命中失败：" + e.getMessage());
         }
         String injection = MemoryRetriever.formatInjection(retrieved);
-        if (injection.isEmpty()) {
-            return Collections.emptyList();
+        if (!injection.isEmpty()) {
+            result.add(new AiMessage("user", injection));
         }
-        List<AiMessage> result = new ArrayList<>();
-        result.add(new AiMessage("user", injection));
         return result;
+    }
+
+    private String buildSearchQuery(List<String> mergedMessages,
+                                    List<Message> context) {
+        StringBuilder builder = new StringBuilder();
+        if (mergedMessages != null) {
+            for (String message : mergedMessages) {
+                if (message != null && !message.trim().isEmpty()) {
+                    builder.append(message.trim()).append('\n');
+                }
+            }
+        }
+        int limit = Math.max(1, config.aiPro.getInt(
+                "ai.pro.retrieve.queryContextMessages"));
+        if (context != null) {
+            int start = Math.max(0, context.size() - limit);
+            for (int i = start; i < context.size(); i++) {
+                Message message = context.get(i);
+                if (message == null || "system".equals(message.type)
+                        || AI_USER_ID.equals(message.senderId)) {
+                    continue;
+                }
+                String content = message.content == null
+                        ? "" : message.content.trim();
+                if (!content.isEmpty() && !"voice".equals(message.type)) {
+                    builder.append(content).append('\n');
+                }
+            }
+        }
+        return builder.toString();
     }
 
     private String buildQuery(List<String> mergedMessages,
