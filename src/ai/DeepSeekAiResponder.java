@@ -204,19 +204,18 @@ public class DeepSeekAiResponder implements AiResponder {
                 result = DeepSeekResult.from("");
             }
             if (result.isEmptyContent()) {
-                logEmpty("首次", result, activeRequest);
+                logEmpty("首次", result);
                 result = retryCall(activeRequest, result);
                 if (result.isEmptyContent()) {
-                    logEmpty("重试", result, activeRequest);
+                    logEmpty("重试", result);
                     List<AiMessage> plainRequest =
                             withoutInjectedReferences(activeRequest);
                     if (plainRequest.size() != activeRequest.size()) {
                         sink.reportError("AI 增强提示空响应，回退普通回答重试");
-                        AiDebugLog.log("fallback=remove-injected-references");
                         activeRequest = plainRequest;
                         result = retryCall(activeRequest, result);
                         if (result.isEmptyContent()) {
-                            logEmpty("回退", result, activeRequest);
+                            logEmpty("回退", result);
                             if (mandatory) {
                                 sendMandatoryFallback();
                             }
@@ -245,7 +244,7 @@ public class DeepSeekAiResponder implements AiResponder {
                 DeepSeekResult repaired = retryCall(
                         buildRetryMessages(activeRequest), result);
                 if (repaired.isEmptyContent()) {
-                    logEmpty("修复", repaired, activeRequest);
+                    logEmpty("修复", repaired);
                     if (mandatory) {
                         sendMandatoryFallback();
                     }
@@ -301,45 +300,14 @@ public class DeepSeekAiResponder implements AiResponder {
         return (int) Math.min(Integer.MAX_VALUE, doubled);
     }
 
-    private void logEmpty(String stage,
-                          DeepSeekResult result,
-                          List<AiMessage> request) {
-        String message = "AI " + stage + "空响应：finish_reason="
+    private void logEmpty(String stage, DeepSeekResult result) {
+        sink.reportError("AI " + stage + "空响应：finish_reason="
                 + safe(result.finishReason)
                 + "，contentLength=" + result.contentLength()
-                + "，trimmedLength=" + result.content.strip().length()
                 + "，reasoningOnly=" + result.reasoningOnly
                 + "，requestId=" + safe(result.requestId)
                 + "，thinking=" + result.thinking
-                + "，maxTokens=" + result.maxTokens;
-        sink.reportError(message);
-        AiDebugLog.log(message
-                + "，requestMessages=" + request.size()
-                + "，requestChars=" + requestChars(request)
-                + "，searchInjection=" + hasInjection(
-                request, SEARCH_INJECTION_PREFIX)
-                + "，memoryInjection=" + hasInjection(
-                request, MEMORY_INJECTION_PREFIX));
-    }
-
-    private static int requestChars(List<AiMessage> request) {
-        int chars = 0;
-        for (AiMessage message : request) {
-            chars += message.content == null ? 0 : message.content.length();
-        }
-        return chars;
-    }
-
-    private static boolean hasInjection(List<AiMessage> request,
-                                        String prefix) {
-        for (AiMessage message : request) {
-            if ("user".equals(message.role)
-                    && message.content != null
-                    && message.content.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
+                + "，maxTokens=" + result.maxTokens);
     }
 
     private static String safe(String value) {
@@ -389,7 +357,6 @@ public class DeepSeekAiResponder implements AiResponder {
 
     private void sendMandatoryFallback() {
         sink.reportError("AI 未按强制回复要求输出，使用兜底回复");
-        AiDebugLog.log("fallback=mandatory-message");
         try {
             sink.appendAiMessage(MANDATORY_FALLBACK);
         } catch (Exception e) {

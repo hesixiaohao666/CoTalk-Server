@@ -1,6 +1,5 @@
 package ai.pro;
 
-import ai.AiDebugLog;
 import server.ServerConfig;
 
 import java.sql.SQLException;
@@ -64,37 +63,25 @@ public class AiProSearchService {
             return SearchOutcome.EMPTY;
         }
         if (limit > 0 && used >= limit) {
-            AiDebugLog.log("search=limit used=" + used + " limit=" + limit);
             return new SearchOutcome(null, LIMIT_NOTICE, 0);
         }
 
         String safeQuery = limitQuery(query.trim(), Math.max(1,
                 config.aiPro.getInt("ai.pro.search.maxQueryChars")));
         try {
-            long startedAt = System.currentTimeMillis();
             List<AiProSearchResult> results = client.search(safeQuery);
             if (results.isEmpty()) {
-                AiDebugLog.log("search=empty ms="
-                        + (System.currentTimeMillis() - startedAt)
-                        + " queryChars=" + safeQuery.length());
                 return SearchOutcome.EMPTY;
             }
             String injection = format(results);
             if (injection.isEmpty()) {
-                AiDebugLog.log("search=empty-format results="
-                        + results.size());
                 return SearchOutcome.EMPTY;
             }
             memoryStore.setMeta(META_DATE, today);
             memoryStore.setMeta(META_COUNT, String.valueOf(used + 1));
-            AiDebugLog.log("search=ok results=" + results.size()
-                    + " injectionChars=" + injection.length()
-                    + " queryChars=" + safeQuery.length()
-                    + " ms=" + (System.currentTimeMillis() - startedAt));
             return new SearchOutcome(injection, null, results.size());
         } catch (Exception e) {
             logger.accept("联网搜索失败：" + e.getMessage());
-            AiDebugLog.log("search=failed error=" + e.getMessage());
             return SearchOutcome.EMPTY;
         }
     }
