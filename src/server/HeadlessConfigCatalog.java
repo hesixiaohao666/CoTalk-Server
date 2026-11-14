@@ -96,7 +96,7 @@ public final class HeadlessConfigCatalog {
         text("ai.mentions", "AI @ 触发词", GROUP_AI, "逗号分隔", false, true);
         text("ai.keywords", "AI 参与关键词", GROUP_AI, "逗号分隔", false, true);
         chance("ai.keywordChance", "关键词回复概率");
-        chance("ai.randomChance", "随机参与概率");
+        chance("ai.randomChance", "旧随机参与概率（兼容）");
         chance("ai.peakChance", "峰时参与概率");
         chance("ai.offPeakChance", "谷时参与概率");
         text("ai.peak.timezone", "峰时判断时区", GROUP_AI,

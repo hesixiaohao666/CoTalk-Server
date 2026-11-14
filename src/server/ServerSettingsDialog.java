@@ -1,6 +1,7 @@
 package server;
 
 import ai.AiPrompts;
+import ai.AiSchedule;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -74,6 +75,11 @@ public class ServerSettingsDialog extends JDialog {
     private final JTextField aiKeywordsField = new JTextField(24);
     private final JTextField aiKeywordChanceField = new JTextField(8);
     private final JTextField aiRandomChanceField = new JTextField(8);
+    private final JTextField aiPeakChanceField = new JTextField(8);
+    private final JTextField aiOffPeakChanceField = new JTextField(8);
+    private final JTextField aiPeakTimezoneField = new JTextField(20);
+    private final JTextField aiPeakDaysField = new JTextField(16);
+    private final JTextField aiPeakPeriodsField = new JTextField(32);
     private final JTextField aiAvatarField = new JTextField(24);
     private final JButton browseAvatarButton = new JButton("浏览…");
     private final JTextArea aiForcedPromptArea = new JTextArea(5, 36);
@@ -249,7 +255,16 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "@ 触发词", aiMentionsField, "逗号分隔");
         addRow(form, row++, "参与关键词", aiKeywordsField, "如：大肥鱼,鱼,AI");
         addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
-        addRow(form, row++, "随机参与概率", aiRandomChanceField, "0–100");
+        addRow(form, row++, "峰时参与概率", aiPeakChanceField, "0–100");
+        addRow(form, row++, "谷时参与概率", aiOffPeakChanceField, "0–100");
+        addRow(form, row++, "峰时时区", aiPeakTimezoneField,
+                "IANA 时区，留空使用系统时区");
+        addRow(form, row++, "峰时日期", aiPeakDaysField,
+                "例如 MON-FRI");
+        addRow(form, row++, "峰时时段", aiPeakPeriodsField,
+                "例如 09:00-12:00,14:00-18:00");
+        addRow(form, row++, "旧随机概率（兼容）", aiRandomChanceField,
+                "新逻辑优先使用峰时/谷时概率");
 
         aiForcedPromptArea.setLineWrap(true);
         aiForcedPromptArea.setWrapStyleWord(true);
@@ -280,7 +295,8 @@ public class ServerSettingsDialog extends JDialog {
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 5，最多 10");
         addRow(form, row++, "多条间隔", aiReplyDelayField, "毫秒，默认 600");
         addNote(form, row++,
-                "被 @ 时必须回复；关键词和随机参与按概率触发。"
+                "被 @ 时必须回复；关键词和峰时/谷时随机参与按概率触发，"
+                        + "峰时由程序按服务器本地时区判断。"
                         + "修改 AI 配置后需要重启服务。");
         addNote(form, row,
                 "AI Pro 的轮次、记忆、情绪、表情、待办、搜索等全部参数"
@@ -480,7 +496,10 @@ public class ServerSettingsDialog extends JDialog {
                 adminKeyField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
                 aiMentionsField, aiKeywordsField, aiKeywordChanceField,
-                aiRandomChanceField, aiAvatarField, aiCooldownField,
+                aiRandomChanceField, aiPeakChanceField,
+                aiOffPeakChanceField, aiPeakTimezoneField,
+                aiPeakDaysField, aiPeakPeriodsField,
+                aiAvatarField, aiCooldownField,
                 aiMaxContextField, aiTimeoutField, aiMaxTokensField,
                 aiMessageMaxCharsField, aiMaxMessagesField, aiReplyDelayField
         };
@@ -544,6 +563,11 @@ public class ServerSettingsDialog extends JDialog {
         aiKeywordsField.setText(original.aiKeywords);
         aiKeywordChanceField.setText(String.valueOf(original.aiKeywordChance));
         aiRandomChanceField.setText(String.valueOf(original.aiRandomChance));
+        aiPeakChanceField.setText(String.valueOf(original.aiPeakChance));
+        aiOffPeakChanceField.setText(String.valueOf(original.aiOffPeakChance));
+        aiPeakTimezoneField.setText(original.aiPeakTimezone);
+        aiPeakDaysField.setText(original.aiPeakDays);
+        aiPeakPeriodsField.setText(original.aiPeakPeriods);
         aiAvatarField.setText(original.aiAvatar);
         aiForcedPromptArea.setText(AiPrompts.FORCED_PROMPT);
         aiForcedPromptArea.setCaretPosition(0);
@@ -770,9 +794,35 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("ai.mentions", text(aiMentionsField));
         properties.setProperty("ai.keywords", text(aiKeywordsField));
         properties.setProperty("ai.keywordChance",
-                String.valueOf(readInt(aiKeywordChanceField, "关键词概率")));
+                String.valueOf(readChance(aiKeywordChanceField,
+                        "关键词概率")));
         properties.setProperty("ai.randomChance",
-                String.valueOf(readInt(aiRandomChanceField, "随机参与概率")));
+                String.valueOf(readChance(aiRandomChanceField,
+                        "旧随机参与概率")));
+        properties.setProperty("ai.peakChance",
+                String.valueOf(readChance(aiPeakChanceField,
+                        "峰时参与概率")));
+        properties.setProperty("ai.offPeakChance",
+                String.valueOf(readChance(aiOffPeakChanceField,
+                        "谷时参与概率")));
+        String peakTimezone = text(aiPeakTimezoneField);
+        String peakDays = text(aiPeakDaysField);
+        String peakPeriods = text(aiPeakPeriodsField);
+        try {
+            AiSchedule.validate(peakDays, peakPeriods, peakTimezone);
+        } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("days")) {
+                aiPeakDaysField.requestFocusInWindow();
+            } else if (e.getMessage().contains("periods")) {
+                aiPeakPeriodsField.requestFocusInWindow();
+            } else {
+                aiPeakTimezoneField.requestFocusInWindow();
+            }
+            throw e;
+        }
+        properties.setProperty("ai.peak.timezone", peakTimezone);
+        properties.setProperty("ai.peak.days", peakDays);
+        properties.setProperty("ai.peak.periods", peakPeriods);
         properties.setProperty("ai.avatar", text(aiAvatarField));
         properties.setProperty("ai.prompt.custom", aiPromptArea.getText().trim());
         properties.setProperty("ai.cooldownMs",
@@ -802,6 +852,15 @@ public class ServerSettingsDialog extends JDialog {
             field.requestFocusInWindow();
             throw new IllegalArgumentException(name + "必须是整数");
         }
+    }
+
+    private int readChance(JTextField field, String name) {
+        int value = readInt(field, name);
+        if (value < 0 || value > 100) {
+            field.requestFocusInWindow();
+            throw new IllegalArgumentException(name + "必须在 0–100 之间");
+        }
+        return value;
     }
 
     private static String text(JTextField field) {

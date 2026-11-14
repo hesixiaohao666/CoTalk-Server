@@ -1,6 +1,7 @@
 package server;
 
 import ai.AiPrompts;
+import ai.AiSchedule;
 import ai.pro.AiProConfig;
 
 import java.io.BufferedReader;
@@ -230,13 +231,8 @@ public final class ServerConfigStore {
                 || config.aiOffPeakChance > 100) {
             throw new IllegalArgumentException("AI 参与概率必须在 0–100 之间");
         }
-        if (!config.aiPeakTimezone.isEmpty()) {
-            try {
-                java.time.ZoneId.of(config.aiPeakTimezone);
-            } catch (Exception e) {
-                throw new IllegalArgumentException("ai.peak.timezone 时区无效");
-            }
-        }
+        AiSchedule.validate(config.aiPeakDays, config.aiPeakPeriods,
+                config.aiPeakTimezone);
         if (config.aiEnabled
                 && (config.aiModel.isEmpty()
                 || config.aiBaseUrl.isEmpty())) {

@@ -85,6 +85,13 @@ public class DeepSeekAiResponder implements AiResponder {
         return containsAny(content, directMentions);
     }
 
+    /**
+     * 未命中关键词时的随机参与概率；经典与 Pro 共用峰谷时判断。
+     */
+    protected int scheduleChance() {
+        return AiSchedule.chance(config);
+    }
+
     @Override
     public void onMessage(Member sender,
                           Message message,
@@ -97,7 +104,7 @@ public class DeepSeekAiResponder implements AiResponder {
         boolean triggered = mandatory
                 || (keyword
                 ? hit(config.aiKeywordChance)
-                : hit(config.aiRandomChance));
+                : hit(scheduleChance()));
 
         synchronized (lock) {
             if (closed) {
