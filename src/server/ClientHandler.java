@@ -1252,11 +1252,22 @@ public class ClientHandler implements Runnable {
                     "缺少 msgId", reqId));
             return;
         }
-        MessageService.RecallResult result =
-                server.recallByMsgId(msgId, clientTag);
+        // 强制撤回只由服务端根据当前连接的管理员身份判定，
+        // 客户端请求中的任何 force 字段都不参与授权。
+        boolean force = config.adminEnabled
+                && member != null && member.admin;
+        MessageService.RecallResult result = force
+                ? server.forceRecallByMsgId(msgId)
+                : server.recallByMsgId(msgId, clientTag);
         if (!result.success) {
             send(Protocol.error(result.errorCode,
                     result.errorMessage, reqId));
+            return;
+        }
+        if (force && result.message != null) {
+            server.getEvents().onLog("管理员 "
+                    + (member.nickname == null ? "" : member.nickname)
+                    + " 强制撤回 #" + result.message.seq);
         }
     }
 

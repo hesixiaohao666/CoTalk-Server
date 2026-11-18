@@ -173,6 +173,16 @@ public class MessageService {
         }
     }
 
+    public synchronized RecallResult forceRecallByMsgId(String msgId) {
+        try {
+            Message message = messageStore.findByMsgUuid(msgId);
+            return recall(message, null, true);
+        } catch (SQLException e) {
+            return RecallResult.failure(Protocol.ERR_DB,
+                    "读取消息失败：" + e.getMessage());
+        }
+    }
+
     public synchronized RecallResult forceRecallBySeq(long seq) {
         try {
             Message message = messageStore.findBySeq(seq);

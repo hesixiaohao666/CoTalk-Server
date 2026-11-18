@@ -637,6 +637,18 @@ public class ChatServer implements AiReplySink {
         return result;
     }
 
+    /**
+     * 管理员强制撤回任意消息，不受发送者与 2 分钟限制。
+     */
+    public MessageService.RecallResult forceRecallByMsgId(String msgId) {
+        MessageService.RecallResult result =
+                messageService.forceRecallByMsgId(msgId);
+        if (result.success) {
+            broadcastRecall(result);
+        }
+        return result;
+    }
+
     private void broadcastRecall(MessageService.RecallResult result) {
         if (!running || result.message == null) {
             return;
