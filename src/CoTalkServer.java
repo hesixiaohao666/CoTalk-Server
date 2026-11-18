@@ -610,16 +610,18 @@ public class CoTalkServer extends JFrame {
     private void updateMembers(List<Member> members) {
         memberModel.clear();
         memberBorder.setTitle(members.isEmpty()
-                ? "在线成员"
-                : "在线成员（" + members.size() + "）");
+                ? "群聊成员"
+                : "群聊成员（" + members.size() + "）");
         if (memberListPanel != null) {
             memberListPanel.repaint();
         }
         if (members.isEmpty()) {
-            memberModel.addElement("暂无在线成员");
+            memberModel.addElement("暂无成员");
         } else {
             for (Member member : members) {
-                memberModel.addElement(member.nickname + (member.ai ? " [AI]" : ""));
+                String suffix = member.ai ? " [AI]"
+                        : (member.online ? "" : " [离线]");
+                memberModel.addElement(member.nickname + suffix);
             }
         }
         memberCountLabel.setText(members.size() + " 人");

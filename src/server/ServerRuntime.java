@@ -137,7 +137,7 @@ public final class ServerRuntime {
                             config, chatServer, imageResolver,
                             coreMemoryStore, database, messageService,
                             attachmentService);
-                    events.onLog("AI群友Pro 已启用（实验性功能）");
+                    events.onLog("AI群友Pro 已启用");
                 } catch (Exception e) {
                     events.onLog("AI Pro 初始化失败，回退经典 AI："
                             + e.getMessage());
@@ -317,6 +317,9 @@ public final class ServerRuntime {
     }
 
     public List<Member> getMembers() {
+        if (chatServer != null) {
+            return chatServer.memberSnapshot();
+        }
         return roomService == null
                 ? Collections.emptyList()
                 : roomService.snapshot();

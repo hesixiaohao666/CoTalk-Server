@@ -126,6 +126,9 @@ public class ChatServer implements AiReplySink {
                 handler.notifyKicked();
             }
         }
+        // 被移出的成员不能继续留在在线快照或重连宽限队列中。
+        cancelPendingForMember(identityId);
+        roomService.leave(identityId);
         broadcastMemberList();
         return account;
     }
@@ -463,6 +466,13 @@ public class ChatServer implements AiReplySink {
     }
 
     public Member claimPendingMember(String clientTag) {
+        return claimPendingMember(clientTag, null);
+    }
+
+    /**
+     * 只有身份 ID 一致时才复用待重连成员，避免旧身份被新身份冒用。
+     */
+    public Member claimPendingMember(String clientTag, String expectedId) {
         if (clientTag == null || clientTag.isEmpty()) {
             return null;
         }
@@ -474,8 +484,70 @@ public class ChatServer implements AiReplySink {
         if (pending.task != null) {
             pending.task.cancel(false);
         }
+        if (expectedId != null && !expectedId.isEmpty()
+                && !expectedId.equals(pending.member.id)) {
+            roomService.leave(pending.member.id);
+            return null;
+        }
         return roomService.isOnline(pending.member.id)
                 ? pending.member : null;
+    }
+
+    /**
+     * 取消某个成员的所有待离线任务，例如已被移出或已重新加入。
+     */
+    public void cancelPendingForMember(String memberId) {
+        if (memberId == null || memberId.isEmpty()) {
+            return;
+        }
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        synchronized (pendingDisconnects) {
+            for (java.util.Map.Entry<String, PendingDisconnect> entry
+                    : pendingDisconnects.entrySet()) {
+                if (memberId.equals(entry.getValue().member.id)) {
+                    keys.add(entry.getKey());
+                }
+            }
+            for (String key : keys) {
+                PendingDisconnect pending = pendingDisconnects.remove(key);
+                if (pending != null && pending.task != null) {
+                    pending.task.cancel(false);
+                }
+            }
+        }
+    }
+
+    /**
+     * 同名成员重新加入时清掉仍在宽限期内的旧连接，避免同时出现两个同名在线成员。
+     */
+    public void dropPendingNickname(String nickname, String keepId) {
+        if (nickname == null || nickname.trim().isEmpty()) {
+            return;
+        }
+        String value = nickname.trim();
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        synchronized (pendingDisconnects) {
+            for (java.util.Map.Entry<String, PendingDisconnect> entry
+                    : pendingDisconnects.entrySet()) {
+                PendingDisconnect pending = entry.getValue();
+                if (keepId != null && keepId.equals(pending.member.id)) {
+                    continue;
+                }
+                if (value.equals(pending.member.nickname)) {
+                    keys.add(entry.getKey());
+                }
+            }
+            for (String key : keys) {
+                PendingDisconnect pending = pendingDisconnects.remove(key);
+                if (pending == null) {
+                    continue;
+                }
+                if (pending.task != null) {
+                    pending.task.cancel(false);
+                }
+                roomService.leave(pending.member.id);
+            }
+        }
     }
 
     private void expirePending(String key, PendingDisconnect pending) {
@@ -483,6 +555,14 @@ public class ChatServer implements AiReplySink {
             return;
         }
         if (!roomService.isOnline(pending.member.id)) {
+            return;
+        }
+        // 同一身份已用新连接重新加入时，旧宽限任务不能移除新成员。
+        if (isMemberActive(pending.member.id)) {
+            return;
+        }
+        Member current = roomService.find(pending.member.id);
+        if (current != pending.member) {
             return;
         }
         roomService.leave(pending.member.id);
@@ -528,7 +608,8 @@ public class ChatServer implements AiReplySink {
     }
 
     public void notifyMembersChanged() {
-        events.onMembersChanged(roomService.snapshot());
+        // 与客户端 member_list 保持同一份目录，包含离线身份成员。
+        events.onMembersChanged(memberSnapshot());
     }
 
     public List<Member> memberSnapshot() {

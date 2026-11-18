@@ -53,7 +53,7 @@ public class ServerSettingsDialog extends JDialog {
     private final JCheckBox pushEnabledCheck = new JCheckBox("启用后台推送");
 
     private final JCheckBox adminEnabledCheck =
-            new JCheckBox("启用管理员模式（实验性功能）");
+            new JCheckBox("启用管理员模式");
     private final JPasswordField adminKeyField = new JPasswordField(24);
     private final JCheckBox showAdminKey = new JCheckBox("显示");
     private final JButton generateAdminKeyButton = new JButton("生成随机");
@@ -61,7 +61,7 @@ public class ServerSettingsDialog extends JDialog {
     private final JLabel adminKeyStatusLabel = new JLabel();
 
     private final JCheckBox aiProEnabledCheck =
-            new JCheckBox("AI群友Pro（实验性功能）");
+            new JCheckBox("启用 AI 群友 Pro");
     private final List<JComponent> classicOnlyAiRows = new ArrayList<>();
     private final ai.pro.AiProAdvancedPanel aiProAdvancedPanel;
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
@@ -240,7 +240,7 @@ public class ServerSettingsDialog extends JDialog {
         int row = 0;
 
         addRow(form, row++, "AI群友Pro", aiProEnabledCheck,
-                "实验性功能；关闭时回退经典 AI");
+                "关闭时使用经典 AI");
 
         addRow(form, row++, "AI 开关", aiEnabledCheck,
                 "关闭或未填写 API Key 时不会出现 AI 成员");
@@ -339,7 +339,7 @@ public class ServerSettingsDialog extends JDialog {
         addRow(panel, row++, "设置新密钥", keyRow,
                 "留空保留现有密钥");
         if (runtime != null && runtime.getConfig().adminEnabled) {
-            JButton moderation = new JButton("成员与审核");
+            JButton moderation = new JButton("成员管理");
             moderation.addActionListener(e ->
                     new ServerModerationDialog(this, runtime)
                             .setVisible(true));
@@ -348,14 +348,12 @@ public class ServerSettingsDialog extends JDialog {
         }
 
         addNote(panel, row++,
-                "管理员模式为实验性功能。");
-        addNote(panel, row++,
-                "管理员密钥仅保存 PBKDF2 派生 verifier，配置文件不会回显明文。");
+                "管理员密钥仅保存加密校验值，不会明文写入配置文件。");
         addNote(panel, row++,
                 "生成新密钥后请立即复制保存；保存配置后将不再显示明文。");
         addNote(panel, row++,
-                "启用管理员模式前必须已设置密钥。保存后管理员开关与密钥即时生效，"
-                        + "并自动解除所有在线客户端的管理员绑定；其他配置仍需重启。");
+                "启用管理员模式前需先设置管理员密钥；保存后立即生效，"
+                        + "其他配置需重启服务。");
 
         JScrollPane scroll = new JScrollPane(panel);
         scroll.setBorder(null);
@@ -393,9 +391,7 @@ public class ServerSettingsDialog extends JDialog {
                         + "- 表情包支持批量添加与 GIF 压缩\n"
                         + "- 设置新增显示区，深色模式正式实装\n"
                         + "- 服务端日志按日归档并保留 30 天\n"
-                        + "【实验性功能更新】\n"
-                        + "- AI 群友 Pro 支持系统消息、图片消息触发与拍一拍必回\n"
-                        + "- AI 群友 Pro 无法回答时保持静默\n"), null);
+                        + "- AI 群友 Pro 支持更多消息触发与更稳定的回复\n"), null);
         addRow(panel, row++, "开发信息", readOnlyArea(
                 "作者：何似小浩\n"
                         + "开源仓库：\n"

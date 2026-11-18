@@ -24,7 +24,7 @@ public class ServerModerationDialog extends JDialog {
     private List<IdentityAccount> members = new ArrayList<>();
 
     public ServerModerationDialog(Window owner, ServerRuntime runtime) {
-        super(owner, "成员与审核", ModalityType.APPLICATION_MODAL);
+        super(owner, "成员管理", ModalityType.APPLICATION_MODAL);
         this.runtime = runtime;
         this.service = runtime.getIdentityService();
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -108,7 +108,7 @@ public class ServerModerationDialog extends JDialog {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                     "读取身份数据失败：" + e.getMessage(),
-                    "成员与审核", JOptionPane.ERROR_MESSAGE);
+                    "成员管理", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -130,7 +130,7 @@ public class ServerModerationDialog extends JDialog {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                     "审核失败：" + e.getMessage(),
-                    "成员与审核", JOptionPane.ERROR_MESSAGE);
+                    "成员管理", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -153,7 +153,7 @@ public class ServerModerationDialog extends JDialog {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                     "移除失败：" + e.getMessage(),
-                    "成员与审核", JOptionPane.ERROR_MESSAGE);
+                    "成员管理", JOptionPane.ERROR_MESSAGE);
         }
     }
 }

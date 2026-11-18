@@ -72,6 +72,7 @@ public class ClientHandler implements Runnable {
     private BufferedReader reader;
     private BufferedWriter writer;
     private volatile boolean joined;
+    private volatile boolean kicked;
     private volatile State state = State.CONNECTED;
     private byte[] nonce;
     private Member member;
@@ -545,6 +546,7 @@ public class ClientHandler implements Runnable {
     }
 
     public void notifyKicked() {
+        kicked = true;
         JsonObject data = new JsonObject();
         data.addProperty("message", "您已被移出群聊");
         send(Protocol.frame(Protocol.KICKED, null, data));
@@ -607,7 +609,8 @@ public class ClientHandler implements Runnable {
         }
         server.getEvents().onLog("客户端连接，IP：" + ip);
 
-        Member pending = server.claimPendingMember(tag);
+        Member pending = server.claimPendingMember(tag,
+                identityAccount != null ? identityAccount.id : null);
         boolean rejoined = pending != null;
         if (rejoined) {
             member = pending;
@@ -619,6 +622,9 @@ public class ClientHandler implements Runnable {
                     nickname, signature, ip)
                     : roomService.join(nickname, signature, ip);
         }
+        // 同一身份/同名用户重新加入时，清理旧的宽限任务，避免幽灵成员与重名在线。
+        server.cancelPendingForMember(member.id);
+        server.dropPendingNickname(nickname, member.id);
         if (identityAccount != null) {
             member.username = identityAccount.username;
             member.admin = identityAccount.admin;
@@ -1481,7 +1487,10 @@ public class ClientHandler implements Runnable {
                 server.getEvents().onLog("更新连接日志失败：" + e.getMessage());
             }
             server.unregister(this);
-            if (server.isMemberActive(member.id)) {
+            if (kicked) {
+                server.cancelPendingForMember(member.id);
+                roomService.leave(member.id);
+            } else if (server.isMemberActive(member.id)) {
                 server.getEvents().onLog(member.nickname
                         + " 旧连接断开，但同一成员已有新连接，忽略延迟离线");
             } else {
@@ -1492,6 +1501,11 @@ public class ClientHandler implements Runnable {
             }
         } else {
             server.unregister(this);
+            if (member != null && !server.isMemberActive(member.id)) {
+                // JOIN 未完成就断开：不能把半成品成员留在在线快照中。
+                server.cancelPendingForMember(member.id);
+                roomService.leave(member.id);
+            }
         }
     }
 
