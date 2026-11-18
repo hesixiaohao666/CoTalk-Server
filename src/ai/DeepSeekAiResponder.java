@@ -258,13 +258,14 @@ public class DeepSeekAiResponder implements AiResponder {
                         if (result.isEmptyContent()) {
                             logEmpty("回退", result);
                             if (mandatory) {
-                                sendMandatoryFallback();
+                                handleMandatoryFailure(
+                                        "AI 空响应回退后仍为空");
                             }
                             return;
                         }
                     } else {
                         if (mandatory) {
-                            sendMandatoryFallback();
+                            handleMandatoryFailure("AI 空响应重试后仍为空");
                         }
                         return;
                     }
@@ -287,7 +288,7 @@ public class DeepSeekAiResponder implements AiResponder {
                 if (repaired.isEmptyContent()) {
                     logEmpty("修复", repaired);
                     if (mandatory) {
-                        sendMandatoryFallback();
+                        handleMandatoryFailure("AI 修复响应为空");
                     }
                     return;
                 }
@@ -295,7 +296,7 @@ public class DeepSeekAiResponder implements AiResponder {
             }
             if (reply == null || !reply.send || reply.actions.isEmpty()) {
                 if (mandatory) {
-                    sendMandatoryFallback();
+                    handleMandatoryFailure("AI 未输出可执行动作");
                 }
                 return;
             }
@@ -314,12 +315,12 @@ public class DeepSeekAiResponder implements AiResponder {
         } catch (IllegalArgumentException e) {
             sink.reportError("AI 输出格式无效：" + e.getMessage());
             if (mandatory) {
-                sendMandatoryFallback();
+                handleMandatoryFailure("AI 修复后仍无法解析动作");
             }
         } catch (Exception e) {
             sink.reportError("AI 调用失败：" + e.getMessage());
             if (mandatory) {
-                sink.reportFailure(config.aiName + "暂时无法回复，请稍后再试");
+                handleCallFailure("AI 调用异常");
             }
         } finally {
             finishRequest();
@@ -394,6 +395,29 @@ public class DeepSeekAiResponder implements AiResponder {
             result.add(message);
         }
         return result;
+    }
+
+    /**
+     * AI Pro 无法回答时静默；经典 AI 保持原有兜底与失败提示。
+     */
+    protected boolean silentOnFailure() {
+        return false;
+    }
+
+    protected void handleMandatoryFailure(String detail) {
+        if (silentOnFailure()) {
+            sink.reportError(detail + "，AI Pro 静默不发送");
+            return;
+        }
+        sendMandatoryFallback();
+    }
+
+    protected void handleCallFailure(String detail) {
+        if (silentOnFailure()) {
+            sink.reportError(detail + "，AI Pro 静默不发送");
+            return;
+        }
+        sink.reportFailure(config.aiName + "暂时无法回复，请稍后再试");
     }
 
     private void sendMandatoryFallback() {

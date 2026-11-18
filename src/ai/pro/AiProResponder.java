@@ -188,6 +188,11 @@ public class AiProResponder extends DeepSeekAiResponder {
     }
 
     @Override
+    protected boolean silentOnFailure() {
+        return true;
+    }
+
+    @Override
     public void onSystemMessage(Message message) {
         if (message == null || message.content == null
                 || message.content.trim().isEmpty()) {
