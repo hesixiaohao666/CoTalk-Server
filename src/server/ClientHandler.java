@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import model.Attachment;
 import model.Avatar;
+import model.IdentityAccount;
 import model.Member;
 import model.Message;
 import model.Room;
@@ -82,6 +83,12 @@ public class ClientHandler implements Runnable {
     private long adminChallengeExpiresAt;
     private int adminAuthFailures;
     private long adminAuthNextAttemptAt;
+    private IdentityAccount identityAccount;
+    private IdentityAccount pendingIdentity;
+    private String identityAdminNonce = "";
+    private long identityAdminExpiresAt;
+    private int identityLoginFailures;
+    private long identityNextAttemptAt;
 
     public ClientHandler(Socket socket,
                          ChatServer server,
@@ -192,6 +199,21 @@ public class ClientHandler implements Runnable {
         }
 
         if (state == State.AUTHENTICATED) {
+            if (config.adminEnabled) {
+                switch (type) {
+                    case Protocol.IDENTITY_ADMIN_CHALLENGE_REQ:
+                        handleIdentityAdminChallenge(reqId);
+                        return true;
+                    case Protocol.IDENTITY_LOGIN:
+                        handleIdentityLogin(data, reqId);
+                        return true;
+                    case Protocol.IDENTITY_REGISTER:
+                        handleIdentityRegister(data, reqId);
+                        return true;
+                    default:
+                        break;
+                }
+            }
             if (Protocol.JOIN.equals(type)) {
                 handleJoin(data, reqId);
                 return !closed.get();
@@ -201,7 +223,8 @@ public class ClientHandler implements Runnable {
                 return true;
             }
             send(Protocol.error(Protocol.ERR_NOT_JOINED,
-                    "请先 join", reqId));
+                    config.adminEnabled && identityAccount == null
+                            ? "请先完成身份验证" : "请先 join", reqId));
             return true;
         }
 
@@ -338,9 +361,189 @@ public class ClientHandler implements Runnable {
         ok.addProperty("maxClientVersionCode",
                 VersionPolicy.MAX_CLIENT_VERSION_CODE);
         ok.addProperty("aiEnabled", server.isAiActive());
+        ok.addProperty("identityRequired", config.adminEnabled);
+        ok.addProperty("identityEnabled", config.adminEnabled);
+        ok.addProperty("joinReviewRequired", config.adminJoinReviewEnabled);
+        ok.addProperty("adminEnabled", config.adminEnabled);
         send(Protocol.frame(Protocol.HELLO_OK, reqId, ok));
         server.getEvents().onLog("密钥验证通过：" + ip);
         return true;
+    }
+
+    private void handleIdentityAdminChallenge(String reqId) {
+        if (!config.adminEnabled) {
+            send(Protocol.error(Protocol.ERR_IDENTITY_INVALID,
+                    "当前房间未启用身份验证", reqId));
+            return;
+        }
+        if (config.adminSalt.isEmpty() || config.adminVerifier.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_ADMIN_DISABLED,
+                    "服务端未配置管理员密钥", reqId));
+            return;
+        }
+        identityAdminNonce = AdminAuth.generateNonce();
+        identityAdminExpiresAt = System.currentTimeMillis() + 60000L;
+        JsonObject data = new JsonObject();
+        data.addProperty("salt", config.adminSalt);
+        data.addProperty("iterations", config.adminIterations);
+        data.addProperty("nonce", identityAdminNonce);
+        send(Protocol.frame(
+                Protocol.IDENTITY_ADMIN_CHALLENGE_RES, reqId, data));
+    }
+
+    private void handleIdentityLogin(JsonObject data, String reqId) {
+        IdentityService service = identityService();
+        if (service == null) {
+            return;
+        }
+        if (System.currentTimeMillis() < identityNextAttemptAt) {
+            send(Protocol.error(Protocol.ERR_IDENTITY_FAILED,
+                    "身份验证尝试过多，请稍后再试", reqId));
+            return;
+        }
+        String username = optString(data, "username", "");
+        String password = optString(data, "password", "");
+        try {
+            IdentityService.LoginResult result =
+                    service.login(username, password);
+            if (result.status == IdentityService.LOGIN_OK) {
+                identityAccount = result.account;
+                pendingIdentity = null;
+                identityLoginFailures = 0;
+                identityNextAttemptAt = 0L;
+                sendIdentityOk(reqId, result.account);
+                return;
+            }
+            if (result.status == IdentityService.LOGIN_PENDING) {
+                pendingIdentity = result.account;
+                sendIdentityPending(reqId, result.account);
+                return;
+            }
+            identityLoginFailed();
+            send(Protocol.error(Protocol.ERR_IDENTITY_FAILED,
+                    result.message == null || result.message.isEmpty()
+                            ? "用户名或密码错误" : result.message, reqId));
+        } catch (Exception e) {
+            identityLoginFailed();
+            server.getEvents().onLog("身份登录异常：" + e.getMessage());
+            send(Protocol.error(Protocol.ERR_IDENTITY_FAILED,
+                    "身份验证失败", reqId));
+        }
+    }
+
+    private void handleIdentityRegister(JsonObject data, String reqId) {
+        IdentityService service = identityService();
+        if (service == null) {
+            return;
+        }
+        String username = optString(data, "username", "");
+        String password = optString(data, "password", "");
+        String nickname = optString(data, "nickname", "");
+        String adminProof = optString(data, "adminProof", "");
+        boolean adminVerified = false;
+        if (!adminProof.isEmpty()) {
+            if (identityAdminNonce.isEmpty()
+                    || System.currentTimeMillis() > identityAdminExpiresAt
+                    || !AdminAuth.verifyProof(config.adminVerifier,
+                    identityAdminNonce, adminProof)) {
+                identityAdminNonce = "";
+                send(Protocol.error(Protocol.ERR_ADMIN_AUTH,
+                        "管理员密钥验证失败", reqId));
+                return;
+            }
+            identityAdminNonce = "";
+            adminVerified = true;
+        }
+        try {
+            IdentityService.RegisterResult result = service.register(
+                    username, password, nickname, adminVerified);
+            if (!result.success) {
+                int code = result.message != null
+                        && result.message.contains("已存在")
+                        ? Protocol.ERR_IDENTITY_DUPLICATE
+                        : Protocol.ERR_IDENTITY_INVALID;
+                send(Protocol.error(code, result.message, reqId));
+                return;
+            }
+            if (result.account.pending()) {
+                pendingIdentity = result.account;
+                sendIdentityPending(reqId, result.account);
+            } else {
+                identityAccount = result.account;
+                identityLoginFailures = 0;
+                identityNextAttemptAt = 0L;
+                sendIdentityOk(reqId, result.account);
+            }
+        } catch (Exception e) {
+            server.getEvents().onLog("身份注册异常：" + e.getMessage());
+            send(Protocol.error(Protocol.ERR_IDENTITY_FAILED,
+                    "注册失败，请稍后重试", reqId));
+        }
+    }
+
+    private void sendIdentityOk(String reqId, IdentityAccount account) {
+        JsonObject data = new JsonObject();
+        data.addProperty("identityId", account.id);
+        data.addProperty("username", account.username);
+        data.addProperty("nickname", account.nickname);
+        data.addProperty("admin", account.admin);
+        send(Protocol.frame(Protocol.IDENTITY_OK, reqId, data));
+    }
+
+    private void sendIdentityPending(String reqId, IdentityAccount account) {
+        JsonObject data = new JsonObject();
+        data.addProperty("identityId", account.id);
+        data.addProperty("username", account.username);
+        data.addProperty("nickname", account.nickname);
+        data.addProperty("message", "等待管理员审核");
+        send(Protocol.frame(Protocol.IDENTITY_PENDING, reqId, data));
+    }
+
+    private IdentityService identityService() {
+        IdentityService service = server.getIdentityService();
+        if (service == null) {
+            send(Protocol.error(Protocol.ERR_IDENTITY_FAILED,
+                    "身份服务未初始化", null));
+        }
+        return service;
+    }
+
+    private void identityLoginFailed() {
+        identityLoginFailures++;
+        if (identityLoginFailures >= config.adminIdentityLoginRateLimit) {
+            identityNextAttemptAt = System.currentTimeMillis()
+                    + config.adminIdentityLoginWindowMs;
+            identityLoginFailures = 0;
+        }
+    }
+
+    /**
+     * 服务端管理员通过申请后，通知同一连接解除等待状态。
+     */
+    public boolean notifyIdentityApproved(IdentityAccount account) {
+        if (account == null || pendingIdentity == null
+                || !pendingIdentity.id.equals(account.id)) {
+            return false;
+        }
+        pendingIdentity = null;
+        identityAccount = account;
+        JsonObject data = new JsonObject();
+        data.addProperty("identityId", account.id);
+        data.addProperty("username", account.username);
+        data.addProperty("admin", account.admin);
+        send(Protocol.frame(Protocol.IDENTITY_APPROVED, null, data));
+        return true;
+    }
+
+    public void notifyKicked() {
+        JsonObject data = new JsonObject();
+        data.addProperty("message", "您已被移出群聊");
+        send(Protocol.frame(Protocol.KICKED, null, data));
+        close();
+    }
+
+    public String identityId() {
+        return identityAccount == null ? "" : identityAccount.id;
     }
 
     private void handleJoin(JsonObject data, String reqId) {
@@ -350,7 +553,17 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        String nickname = optString(data, "nickname", "").trim();
+        if (config.adminEnabled && identityAccount == null) {
+            send(Protocol.error(pendingIdentity != null
+                            ? Protocol.ERR_IDENTITY_PENDING
+                            : Protocol.ERR_IDENTITY_REQUIRED,
+                    pendingIdentity != null ? "等待管理员审核" : "请先完成身份验证",
+                    reqId));
+            return;
+        }
+        String nickname = identityAccount != null
+                ? identityAccount.nickname
+                : optString(data, "nickname", "").trim();
         if (nickname.isEmpty() || nickname.length() > 16) {
             send(Protocol.error(Protocol.ERR_INVALID_INPUT,
                     "昵称需为 1–16 个字符", reqId));
@@ -393,6 +606,10 @@ public class ClientHandler implements Runnable {
             member.signature = signature;
         } else {
             member = roomService.join(nickname, signature, ip);
+        }
+        if (identityAccount != null) {
+            member.username = identityAccount.username;
+            member.admin = identityAccount.admin;
         }
         if (avatarData != null) {
             try {
@@ -442,8 +659,15 @@ public class ClientHandler implements Runnable {
         server.notifyMembersChanged();
 
         server.getEvents().onLog((rejoined ? nickname + " 重新加入" : nickname + " 加入")
-                + "，临时 ID " + member.id
+                + "，成员 ID " + member.id
                 + "，客户端 IP " + ip);
+        if (identityAccount != null && server.getIdentityService() != null) {
+            try {
+                server.getIdentityService().touchSeen(identityAccount);
+            } catch (Exception ignored) {
+                // 在线状态更新失败不影响加入
+            }
+        }
         if (!rejoined) {
             server.onMemberJoined(member);
         }

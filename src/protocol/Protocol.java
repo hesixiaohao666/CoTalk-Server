@@ -22,6 +22,8 @@ public final class Protocol {
     public static final String FILE_REQ = "file_req";
     public static final String RECALL_REQ = "recall_req";
     public static final String POKE_REQ = "poke_req";
+    public static final String IDENTITY_ADMIN_CHALLENGE_REQ = "identity_admin_challenge_req";
+    public static final String IDENTITY_ADMIN_CHALLENGE_RES = "identity_admin_challenge_res";
     public static final String IDENTITY_LOGIN = "identity_login";
     public static final String IDENTITY_REGISTER = "identity_register";
     public static final String IDENTITY_OK = "identity_ok";

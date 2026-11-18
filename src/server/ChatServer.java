@@ -5,6 +5,7 @@ import ai.AiResponder;
 import ai.NoopAiResponder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import model.IdentityAccount;
 import model.Member;
 import model.Message;
 import model.Room;
@@ -54,6 +55,7 @@ public class ChatServer implements AiReplySink {
     private final ServerEvents events;
     private final Object roomUpdateLock = new Object();
     private volatile AiResponder aiResponder = new NoopAiResponder();
+    private volatile IdentityService identityService;
     private volatile String roomAvatarId = "";
     private volatile int roomAvatarVersion;
     private volatile RoomStore roomStore;
@@ -89,6 +91,42 @@ public class ChatServer implements AiReplySink {
         this.avatarService = avatarService;
         this.attachmentService = attachmentService;
         this.events = events;
+    }
+
+    public void setIdentityService(IdentityService identityService) {
+        this.identityService = identityService;
+    }
+
+    public IdentityService getIdentityService() {
+        return identityService;
+    }
+
+    public void notifyIdentityApproved(IdentityAccount account) {
+        if (account == null) {
+            return;
+        }
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            handler.notifyIdentityApproved(account);
+        }
+    }
+
+    public IdentityAccount kickIdentity(String identityId,
+                                        String operator) throws Exception {
+        IdentityService service = identityService;
+        if (service == null) {
+            return null;
+        }
+        IdentityAccount account = service.kick(identityId, operator);
+        if (account == null) {
+            return null;
+        }
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (identityId.equals(handler.identityId())) {
+                handler.notifyKicked();
+            }
+        }
+        broadcastMemberList();
+        return account;
     }
 
     public void setAiResponder(AiResponder responder) {
@@ -719,6 +757,8 @@ public class ChatServer implements AiReplySink {
         JsonObject json = new JsonObject();
         json.addProperty("id", member.id);
         json.addProperty("nickname", member.nickname);
+        json.addProperty("username",
+                member.username == null ? "" : member.username);
         json.addProperty("signature",
                 member.signature == null ? "" : member.signature);
         json.addProperty("avatarVersion", member.avatarVersion);

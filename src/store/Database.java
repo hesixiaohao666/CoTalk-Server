@@ -109,6 +109,7 @@ public class Database implements AutoCloseable {
                     + "ON attachment(file_name)");
 
             createAiProTables(statement);
+            createIdentityTables(statement);
 
             // v3200 -> v3201：用户表情增加审核状态；旧数据默认视为已审核。
             addColumnIfMissing(statement, "ai_emoji", "review_status",
@@ -311,6 +312,42 @@ public class Database implements AutoCloseable {
                 + ")");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_ai_todo_event_todo "
                 + "ON ai_todo_event(todo_id, created_at)");
+    }
+
+    private static void createIdentityTables(Statement statement)
+            throws SQLException {
+        statement.execute("CREATE TABLE IF NOT EXISTS chat_identity ("
+                + "id TEXT PRIMARY KEY, "
+                + "username TEXT NOT NULL UNIQUE, "
+                + "salt TEXT NOT NULL, "
+                + "iterations INTEGER NOT NULL, "
+                + "verifier TEXT NOT NULL, "
+                + "nickname TEXT NOT NULL, "
+                + "status TEXT NOT NULL DEFAULT 'pending', "
+                + "admin INTEGER NOT NULL DEFAULT 0, "
+                + "created_at INTEGER NOT NULL, "
+                + "updated_at INTEGER NOT NULL, "
+                + "last_login_at INTEGER NOT NULL DEFAULT 0, "
+                + "last_seen_at INTEGER NOT NULL DEFAULT 0"
+                + ")");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_identity_status "
+                + "ON chat_identity(status, created_at)");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_identity_admin "
+                + "ON chat_identity(admin)");
+
+        statement.execute("CREATE TABLE IF NOT EXISTS identity_event ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "identity_id TEXT, "
+                + "username TEXT, "
+                + "action TEXT NOT NULL, "
+                + "operator TEXT NOT NULL, "
+                + "note TEXT, "
+                + "created_at INTEGER NOT NULL"
+                + ")");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_identity_event_time "
+                + "ON identity_event(created_at)");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_identity_event_user "
+                + "ON identity_event(identity_id, created_at)");
     }
 
     private static void syncAiProMeta(Statement statement) throws SQLException {

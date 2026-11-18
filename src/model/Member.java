@@ -4,6 +4,7 @@ public class Member {
 
     public final String id;
     public volatile String nickname;
+    public volatile String username = "";
     public volatile String signature;
     public volatile int avatarVersion;
     public volatile boolean admin;

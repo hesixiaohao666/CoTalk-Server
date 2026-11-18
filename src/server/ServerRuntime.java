@@ -37,6 +37,7 @@ public final class ServerRuntime {
     private ChatServer chatServer;
     private AiResponder aiResponder;
     private ai.pro.AiProAdminService aiProAdminService;
+    private IdentityService identityService;
     private AttachmentService attachmentService;
 
     public ServerRuntime(ServerConfig config, ServerEvents events) {
@@ -87,6 +88,9 @@ public final class ServerRuntime {
             chatServer = new ChatServer(
                     config, roomService, logStore, messageService,
                     avatarService, attachmentService, events);
+            identityService = new IdentityService(
+                    database, config, events::onLog);
+            chatServer.setIdentityService(identityService);
             chatServer.setRoomStore(roomStore);
             chatServer.setConfigPath(configPath);
 
@@ -168,6 +172,7 @@ public final class ServerRuntime {
         }
         aiResponder = null;
         aiProAdminService = null;
+        identityService = null;
         if (attachmentService != null) {
             attachmentService.shutdownMaintenance();
             attachmentService = null;
@@ -247,6 +252,22 @@ public final class ServerRuntime {
 
     public ai.pro.AiProAdminService getAiProAdminService() {
         return aiProAdminService;
+    }
+
+    public IdentityService getIdentityService() {
+        return identityService;
+    }
+
+    public void notifyIdentityApproved(model.IdentityAccount account) {
+        if (chatServer != null) {
+            chatServer.notifyIdentityApproved(account);
+        }
+    }
+
+    public model.IdentityAccount kickIdentity(String identityId,
+                                              String operator) throws Exception {
+        return chatServer == null ? null
+                : chatServer.kickIdentity(identityId, operator);
     }
 
     public String getAiProEmotionStatus() {
