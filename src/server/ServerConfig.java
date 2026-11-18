@@ -32,10 +32,22 @@ public class ServerConfig {
     public final boolean pushEnabled;
     public final int reconnectGraceMs;
 
+    public final String logDir;
+    public final int logRetainDays;
+    public final int logMessagePreviewChars;
+
     public volatile boolean adminEnabled;
     public volatile String adminSalt;
     public volatile int adminIterations;
     public volatile String adminVerifier;
+    public final boolean adminJoinReviewEnabled;
+    public final int adminPasswordIterations;
+    public final int adminIdentityUsernameMin;
+    public final int adminIdentityUsernameMax;
+    public final int adminIdentityPasswordMin;
+    public final int adminIdentityPasswordMax;
+    public final int adminIdentityLoginRateLimit;
+    public final int adminIdentityLoginWindowMs;
 
     public final boolean aiProEnabled;
     public final AiProConfig aiPro;
@@ -95,12 +107,32 @@ public class ServerConfig {
                 value(properties, "push.enabled", "true"));
         reconnectGraceMs = intValue(
                 properties, "server.reconnectGraceMs", 15000);
+        logDir = value(properties, "log.dir", "logs");
+        logRetainDays = intValue(properties, "log.retainDays", 30);
+        logMessagePreviewChars = intValue(
+                properties, "log.messagePreviewChars", 80);
 
         adminEnabled = Boolean.parseBoolean(
                 value(properties, "admin.enabled", "false"));
         adminSalt = value(properties, "admin.salt", "");
         adminIterations = intValue(properties, "admin.iterations", 120000);
         adminVerifier = value(properties, "admin.verifier", "");
+        adminJoinReviewEnabled = Boolean.parseBoolean(
+                value(properties, "admin.joinReview.enabled", "true"));
+        adminPasswordIterations = intValue(
+                properties, "admin.passwordIterations", 210000);
+        adminIdentityUsernameMin = intValue(
+                properties, "admin.identity.usernameMin", 3);
+        adminIdentityUsernameMax = intValue(
+                properties, "admin.identity.usernameMax", 16);
+        adminIdentityPasswordMin = intValue(
+                properties, "admin.identity.passwordMin", 8);
+        adminIdentityPasswordMax = intValue(
+                properties, "admin.identity.passwordMax", 16);
+        adminIdentityLoginRateLimit = intValue(
+                properties, "admin.identity.loginRateLimit", 5);
+        adminIdentityLoginWindowMs = intValue(
+                properties, "admin.identity.loginWindowMs", 60000);
 
         aiPro = new AiProConfig(properties);
         aiProEnabled = aiPro.enabled();
@@ -164,10 +196,22 @@ public class ServerConfig {
         properties.setProperty("push.enabled", "true");
         properties.setProperty("server.reconnectGraceMs", "15000");
 
+        properties.setProperty("log.dir", "logs");
+        properties.setProperty("log.retainDays", "30");
+        properties.setProperty("log.messagePreviewChars", "80");
+
         properties.setProperty("admin.enabled", "false");
         properties.setProperty("admin.salt", "");
         properties.setProperty("admin.iterations", "120000");
         properties.setProperty("admin.verifier", "");
+        properties.setProperty("admin.joinReview.enabled", "true");
+        properties.setProperty("admin.passwordIterations", "210000");
+        properties.setProperty("admin.identity.usernameMin", "3");
+        properties.setProperty("admin.identity.usernameMax", "16");
+        properties.setProperty("admin.identity.passwordMin", "8");
+        properties.setProperty("admin.identity.passwordMax", "16");
+        properties.setProperty("admin.identity.loginRateLimit", "5");
+        properties.setProperty("admin.identity.loginWindowMs", "60000");
 
         properties.putAll(AiProConfig.defaultProperties());
 
@@ -229,11 +273,32 @@ public class ServerConfig {
         properties.setProperty("push.enabled", String.valueOf(pushEnabled));
         properties.setProperty("server.reconnectGraceMs",
                 String.valueOf(reconnectGraceMs));
+        properties.setProperty("log.dir", logDir);
+        properties.setProperty("log.retainDays",
+                String.valueOf(logRetainDays));
+        properties.setProperty("log.messagePreviewChars",
+                String.valueOf(logMessagePreviewChars));
 
         properties.setProperty("admin.enabled", String.valueOf(adminEnabled));
         properties.setProperty("admin.salt", adminSalt);
         properties.setProperty("admin.iterations", String.valueOf(adminIterations));
         properties.setProperty("admin.verifier", adminVerifier);
+        properties.setProperty("admin.joinReview.enabled",
+                String.valueOf(adminJoinReviewEnabled));
+        properties.setProperty("admin.passwordIterations",
+                String.valueOf(adminPasswordIterations));
+        properties.setProperty("admin.identity.usernameMin",
+                String.valueOf(adminIdentityUsernameMin));
+        properties.setProperty("admin.identity.usernameMax",
+                String.valueOf(adminIdentityUsernameMax));
+        properties.setProperty("admin.identity.passwordMin",
+                String.valueOf(adminIdentityPasswordMin));
+        properties.setProperty("admin.identity.passwordMax",
+                String.valueOf(adminIdentityPasswordMax));
+        properties.setProperty("admin.identity.loginRateLimit",
+                String.valueOf(adminIdentityLoginRateLimit));
+        properties.setProperty("admin.identity.loginWindowMs",
+                String.valueOf(adminIdentityLoginWindowMs));
 
         properties.putAll(aiPro.toProperties());
 

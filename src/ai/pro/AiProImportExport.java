@@ -16,12 +16,12 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * AI Pro 记忆导出/导入。导出格式版本固定为 3201。
+ * AI Pro 记忆导出/导入。导出格式版本固定为 3300。
  */
 public final class AiProImportExport {
 
     public static final String FORMAT = "cotalk-ai-pro-memory";
-    public static final int VERSION = 3201;
+    public static final int VERSION = 3300;
     public static final long MAX_IMPORT_BYTES = 20L * 1024 * 1024;
 
     private static final Pattern MEMORY_ID =

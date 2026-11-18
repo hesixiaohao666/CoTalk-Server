@@ -24,6 +24,8 @@ public final class AiProConfig {
         put("ai.pro.prompt.maxMemoryChars", "1200");
         put("ai.pro.time.enabled", "true");
         put("ai.pro.time.timezone", "");
+        put("ai.pro.trigger.systemMessages", "true");
+        put("ai.pro.trigger.images", "true");
         put("ai.pro.owner.names", "");
         put("ai.pro.migrate.importHistory", "false");
         put("ai.pro.migrate.backup", "true");
@@ -110,7 +112,8 @@ public final class AiProConfig {
         put("ai.pro.emoji.enabled", "true");
         put("ai.pro.emoji.autoImport", "true");
         put("ai.pro.emoji.skipReview", "false");
-        put("ai.pro.emoji.cooldownRounds", "5");
+        put("ai.pro.emoji.cooldownRounds", "0");
+        put("ai.pro.emoji.maxConsecutive", "3");
         put("ai.pro.emoji.topCandidates", "3");
         put("ai.pro.emoji.candidatePool", "50");
         put("ai.pro.emoji.maxBytes", "524288");
@@ -311,6 +314,7 @@ public final class AiProConfig {
         requireDouble("ai.pro.emotion.promptMaxIntensity", 0.0, 1.0);
 
         requireInt("ai.pro.emoji.cooldownRounds", 0, 10000);
+        requireInt("ai.pro.emoji.maxConsecutive", 1, 10);
         requireInt("ai.pro.emoji.topCandidates", 1, 50);
         requireInt("ai.pro.emoji.candidatePool", 1, 10000);
         requireInt("ai.pro.emoji.maxBytes", 1, 50 * 1024 * 1024);

@@ -14,7 +14,7 @@ import java.sql.Statement;
  */
 public class Database implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 3201;
+    private static final int SCHEMA_VERSION = 3300;
 
     private final String path;
     private Connection connection;

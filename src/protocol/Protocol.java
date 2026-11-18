@@ -7,7 +7,7 @@ import com.google.gson.JsonObject;
  */
 public final class Protocol {
 
-    public static final int VERSION = 3200;
+    public static final int VERSION = 3300;
 
     public static final String HELLO = "hello";
     public static final String AUTH_CHALLENGE = "auth_challenge";
@@ -22,6 +22,19 @@ public final class Protocol {
     public static final String FILE_REQ = "file_req";
     public static final String RECALL_REQ = "recall_req";
     public static final String POKE_REQ = "poke_req";
+    public static final String IDENTITY_LOGIN = "identity_login";
+    public static final String IDENTITY_REGISTER = "identity_register";
+    public static final String IDENTITY_OK = "identity_ok";
+    public static final String IDENTITY_PENDING = "identity_pending";
+    public static final String IDENTITY_APPROVED = "identity_approved";
+    public static final String IDENTITY_REJECTED = "identity_rejected";
+    public static final String ADMIN_JOIN_REQUESTS_REQ = "admin_join_requests_req";
+    public static final String ADMIN_JOIN_REQUESTS_RES = "admin_join_requests_res";
+    public static final String ADMIN_JOIN_REVIEW_REQ = "admin_join_review_req";
+    public static final String ADMIN_JOIN_REVIEW_RES = "admin_join_review_res";
+    public static final String ADMIN_KICK_REQ = "admin_kick_req";
+    public static final String ADMIN_KICK_RES = "admin_kick_res";
+    public static final String KICKED = "kicked";
     public static final String ADMIN_AUTH_BEGIN = "admin_auth_begin";
     public static final String ADMIN_AUTH_CHALLENGE = "admin_auth_challenge";
     public static final String ADMIN_AUTH_RESPONSE = "admin_auth_response";
@@ -67,6 +80,14 @@ public final class Protocol {
     public static final int ERR_ADMIN_FORBIDDEN = 2019;
     public static final int ERR_ROOM_UPDATE = 2020;
     public static final int ERR_ADMIN_RATE_LIMIT = 2021;
+    public static final int ERR_IDENTITY_REQUIRED = 2030;
+    public static final int ERR_IDENTITY_FAILED = 2031;
+    public static final int ERR_IDENTITY_PENDING = 2032;
+    public static final int ERR_IDENTITY_REJECTED = 2033;
+    public static final int ERR_IDENTITY_DUPLICATE = 2034;
+    public static final int ERR_IDENTITY_INVALID = 2035;
+    public static final int ERR_KICKED = 2036;
+    public static final int ERR_ADMIN_REVIEW = 2037;
 
     public static final int ERR_AUTH_FAILED = 3001;
     public static final int ERR_CLIENT_VERSION = 3002;

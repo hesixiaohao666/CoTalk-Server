@@ -24,7 +24,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    public static final String CONFIG_VERSION = "3201";
+    public static final String CONFIG_VERSION = "3300";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -98,10 +98,21 @@ public final class ServerConfigStore {
                     || !loaded.containsKey("features.emoji")
                     || !loaded.containsKey("push.enabled")
                     || !loaded.containsKey("server.reconnectGraceMs")
+                    || !loaded.containsKey("log.dir")
+                    || !loaded.containsKey("log.retainDays")
+                    || !loaded.containsKey("log.messagePreviewChars")
                     || !loaded.containsKey("admin.enabled")
                     || !loaded.containsKey("admin.salt")
                     || !loaded.containsKey("admin.iterations")
                     || !loaded.containsKey("admin.verifier")
+                    || !loaded.containsKey("admin.joinReview.enabled")
+                    || !loaded.containsKey("admin.passwordIterations")
+                    || !loaded.containsKey("admin.identity.usernameMin")
+                    || !loaded.containsKey("admin.identity.usernameMax")
+                    || !loaded.containsKey("admin.identity.passwordMin")
+                    || !loaded.containsKey("admin.identity.passwordMax")
+                    || !loaded.containsKey("admin.identity.loginRateLimit")
+                    || !loaded.containsKey("admin.identity.loginWindowMs")
                     || !AiProConfig.missingKeys(loaded).isEmpty();
             configVersionOutdated = !CONFIG_VERSION.equals(
                     loaded.getProperty("config.version", "").trim());
@@ -178,6 +189,18 @@ public final class ServerConfigStore {
             throw new IllegalArgumentException(
                     "server.reconnectGraceMs 必须在 5000–60000 之间");
         }
+        if (config.logDir == null || config.logDir.trim().isEmpty()) {
+            throw new IllegalArgumentException("log.dir 不能为空");
+        }
+        if (config.logRetainDays < 1 || config.logRetainDays > 3650) {
+            throw new IllegalArgumentException(
+                    "log.retainDays 必须在 1–3650 之间");
+        }
+        if (config.logMessagePreviewChars < 0
+                || config.logMessagePreviewChars > 1000) {
+            throw new IllegalArgumentException(
+                    "log.messagePreviewChars 必须在 0–1000 之间");
+        }
         if (config.adminIterations <= 0) {
             throw new IllegalArgumentException("admin.iterations 必须大于 0");
         }
@@ -185,6 +208,33 @@ public final class ServerConfigStore {
             throw new IllegalArgumentException("ai.pro 配置缺失");
         }
         config.aiPro.validate();
+        if (config.adminPasswordIterations < 1
+                || config.adminPasswordIterations > 10000000) {
+            throw new IllegalArgumentException(
+                    "admin.passwordIterations 必须在 1–10000000 之间");
+        }
+        if (config.adminIdentityUsernameMin < 1
+                || config.adminIdentityUsernameMax > 64
+                || config.adminIdentityUsernameMin
+                > config.adminIdentityUsernameMax) {
+            throw new IllegalArgumentException("管理员身份用户名长度配置非法");
+        }
+        if (config.adminIdentityPasswordMin < 1
+                || config.adminIdentityPasswordMax > 128
+                || config.adminIdentityPasswordMin
+                > config.adminIdentityPasswordMax) {
+            throw new IllegalArgumentException("管理员身份密码长度配置非法");
+        }
+        if (config.adminIdentityLoginRateLimit < 1
+                || config.adminIdentityLoginRateLimit > 1000) {
+            throw new IllegalArgumentException(
+                    "admin.identity.loginRateLimit 必须在 1–1000 之间");
+        }
+        if (config.adminIdentityLoginWindowMs < 1000
+                || config.adminIdentityLoginWindowMs > 86400000) {
+            throw new IllegalArgumentException(
+                    "admin.identity.loginWindowMs 必须在 1000–86400000 之间");
+        }
         if (config.adminEnabled && (config.adminSalt.isEmpty()
                 || config.adminVerifier.isEmpty())) {
             throw new IllegalArgumentException(
@@ -285,10 +335,22 @@ public final class ServerConfigStore {
                 write(writer, properties, "push.enabled");
                 write(writer, properties, "server.reconnectGraceMs");
                 writer.write("\n");
+                write(writer, properties, "log.dir");
+                write(writer, properties, "log.retainDays");
+                write(writer, properties, "log.messagePreviewChars");
+                writer.write("\n");
                 write(writer, properties, "admin.enabled");
                 write(writer, properties, "admin.salt");
                 write(writer, properties, "admin.iterations");
                 write(writer, properties, "admin.verifier");
+                write(writer, properties, "admin.joinReview.enabled");
+                write(writer, properties, "admin.passwordIterations");
+                write(writer, properties, "admin.identity.usernameMin");
+                write(writer, properties, "admin.identity.usernameMax");
+                write(writer, properties, "admin.identity.passwordMin");
+                write(writer, properties, "admin.identity.passwordMax");
+                write(writer, properties, "admin.identity.loginRateLimit");
+                write(writer, properties, "admin.identity.loginWindowMs");
                 writer.write("\n");
                 for (String key : AiProConfig.keys()) {
                     write(writer, properties, key);

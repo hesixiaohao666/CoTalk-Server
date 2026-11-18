@@ -63,6 +63,13 @@ public final class HeadlessConfigCatalog {
                 "PNG/JPG 路径，留空使用默认样式", false, true);
 
         text("db.path", "数据库路径", GROUP_STORAGE, "", false, true);
+        text("log.dir", "日志目录", GROUP_STORAGE, "默认 logs", false, true);
+        add("log.retainDays", "日志保留天数", GROUP_STORAGE,
+                AiProConfigField.Type.INTEGER, 1, 3650,
+                null, null, "天", false, true);
+        add("log.messagePreviewChars", "日志消息预览字符数", GROUP_STORAGE,
+                AiProConfigField.Type.INTEGER, 0, 1000,
+                null, null, "字符", false, true);
         add("history.recent", "最近历史条数", GROUP_STORAGE,
                 AiProConfigField.Type.INTEGER, 1, Integer.MAX_VALUE,
                 null, null, "条", false, true);
@@ -84,6 +91,28 @@ public final class HeadlessConfigCatalog {
                 AiProConfigField.Type.INTEGER, 1, Integer.MAX_VALUE,
                 null, null, "", false, true);
         secret("admin.verifier", "管理员 verifier", GROUP_SECURITY);
+        bool("admin.joinReview.enabled", "启用入群审核", GROUP_SECURITY);
+        add("admin.passwordIterations", "身份密码迭代次数", GROUP_SECURITY,
+                AiProConfigField.Type.INTEGER, 1, 10000000,
+                null, null, "次", false, true);
+        add("admin.identity.usernameMin", "身份用户名最小长度",
+                GROUP_SECURITY, AiProConfigField.Type.INTEGER, 1, 64,
+                null, null, "字符", false, true);
+        add("admin.identity.usernameMax", "身份用户名最大长度",
+                GROUP_SECURITY, AiProConfigField.Type.INTEGER, 1, 64,
+                null, null, "字符", false, true);
+        add("admin.identity.passwordMin", "身份密码最小长度",
+                GROUP_SECURITY, AiProConfigField.Type.INTEGER, 1, 128,
+                null, null, "字符", false, true);
+        add("admin.identity.passwordMax", "身份密码最大长度",
+                GROUP_SECURITY, AiProConfigField.Type.INTEGER, 1, 128,
+                null, null, "字符", false, true);
+        add("admin.identity.loginRateLimit", "身份登录失败上限",
+                GROUP_SECURITY, AiProConfigField.Type.INTEGER, 1, 1000,
+                null, null, "次", false, true);
+        add("admin.identity.loginWindowMs", "身份登录限流窗口",
+                GROUP_SECURITY, AiProConfigField.Type.INTEGER,
+                1000, 86400000, null, null, "毫秒", false, true);
 
         bool("ai.enabled", "启用 AI 群友", GROUP_AI);
         secret("ai.apiKey", "AI API Key", GROUP_AI);

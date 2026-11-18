@@ -54,6 +54,10 @@ public final class AiProConfigMeta {
                 500, 100000, "字符", "");
         integer("prompt.maxMemoryChars", "Pro 记忆预算", GROUP_BASIC,
                 0, 100000, "字符", "");
+        bool("trigger.systemMessages", "系统消息可触发回复", GROUP_BASIC,
+                "系统消息按概率触发 AI 主动回复", true);
+        bool("trigger.images", "图片消息可触发回复", GROUP_BASIC,
+                "图片/表情消息按概率触发 AI 主动回复", true);
         list("owner.names", "主人昵称", GROUP_BASIC,
                 "逗号分隔，可留空");
         bool("migrate.importHistory", "迁移历史消息", GROUP_BASIC,
@@ -168,7 +172,9 @@ public final class AiProConfigMeta {
         bool("emoji.skipReview", "无需管理员审核", GROUP_EMOJI,
                 "开启后新表情直接可用；关闭时先进入待审核", true);
         integer("emoji.cooldownRounds", "表情冷却轮次", GROUP_EMOJI,
-                0, 10000, "轮", "");
+                0, 10000, "轮", "兼容配置；v0.3.7 起不再限制发送轮数");
+        integer("emoji.maxConsecutive", "单次最多连续表情", GROUP_EMOJI,
+                1, 10, "个", "默认 3 个");
         integer("emoji.topCandidates", "候选表情数", GROUP_EMOJI,
                 1, 50, "个", "");
         integer("emoji.candidatePool", "候选池大小", GROUP_EMOJI,
