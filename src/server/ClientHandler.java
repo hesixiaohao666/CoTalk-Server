@@ -676,9 +676,9 @@ public class ClientHandler implements Runnable {
         }
         server.notifyMembersChanged();
 
-        server.getEvents().onLog((rejoined ? nickname + " 重新加入" : nickname + " 加入")
-                + "，成员 ID " + member.id
-                + "，客户端 IP " + ip);
+        server.getEvents().onLog("[" + (rejoined ? "成员重连" : "成员加入")
+                + "] " + ChatServer.memberLogLabel(member)
+                + " ID=" + member.id + " IP=" + ip);
         if (identityAccount != null && server.getIdentityService() != null) {
             try {
                 server.getIdentityService().touchSeen(identityAccount);
@@ -1495,9 +1495,10 @@ public class ClientHandler implements Runnable {
                         + " 旧连接断开，但同一成员已有新连接，忽略延迟离线");
             } else {
                 server.schedulePendingDisconnect(member, clientTag);
-                server.getEvents().onLog(member.nickname
-                        + " 连接断开，" + config.reconnectGraceMs
-                        + " 毫秒内保留在线状态，临时 ID " + member.id);
+                server.getEvents().onLog("[成员断开] "
+                        + ChatServer.memberLogLabel(member)
+                        + " ID=" + member.id
+                        + " 宽限期=" + config.reconnectGraceMs + "ms");
             }
         } else {
             server.unregister(this);

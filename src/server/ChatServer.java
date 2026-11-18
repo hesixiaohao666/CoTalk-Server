@@ -129,6 +129,9 @@ public class ChatServer implements AiReplySink {
         // 被移出的成员不能继续留在在线快照或重连宽限队列中。
         cancelPendingForMember(identityId);
         roomService.leave(identityId);
+        events.onLog("[成员移出] " + memberLogLabel(account)
+                + " ID=" + identityId + " 操作者=" + operator);
+        broadcastSystemMessage(account.nickname + " 被管理员移出群聊", false);
         broadcastMemberList();
         return account;
     }
@@ -569,8 +572,8 @@ public class ChatServer implements AiReplySink {
         broadcastMemberList();
         broadcastSystemMessage(pending.member.nickname + " 离开了群聊");
         notifyMembersChanged();
-        events.onLog(pending.member.nickname + " 离开，临时 ID "
-                + pending.member.id);
+        events.onLog("[成员离开] " + memberLogLabel(pending.member)
+                + " ID=" + pending.member.id);
     }
 
     private static String pendingKey(String clientTag, Member member) {
@@ -919,6 +922,35 @@ public class ChatServer implements AiReplySink {
             json.remove("fileExpired");
         }
         return json;
+    }
+
+    /**
+     * 系统日志中的成员标识：昵称（@用户名）。
+     */
+    public static String memberLogLabel(IdentityAccount account) {
+        if (account == null) {
+            return "成员";
+        }
+        String nickname = account.nickname == null
+                || account.nickname.trim().isEmpty()
+                ? "成员" : account.nickname.trim();
+        String username = account.username == null
+                ? "" : account.username.trim();
+        return username.isEmpty()
+                ? nickname : nickname + "（@" + username + "）";
+    }
+
+    public static String memberLogLabel(Member member) {
+        if (member == null) {
+            return "成员";
+        }
+        String nickname = member.nickname == null
+                || member.nickname.trim().isEmpty()
+                ? "成员" : member.nickname.trim();
+        String username = member.username == null
+                ? "" : member.username.trim();
+        return username.isEmpty()
+                ? nickname : nickname + "（@" + username + "）";
     }
 
     public static JsonObject memberJson(Member member) {

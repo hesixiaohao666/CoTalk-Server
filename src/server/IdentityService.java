@@ -82,9 +82,10 @@ public class IdentityService {
         store.insert(account);
         events.record(account.id, account.username, "register",
                 "system", account.status);
-        logger.accept("身份注册：" + account.username
-                + "，状态 " + account.status
-                + (account.admin ? "，管理员" : ""));
+        logger.accept("[入群申请] 用户名=" + account.username
+                + " 昵称=" + account.nickname
+                + " 状态=" + account.status
+                + (account.admin ? " 管理员=是" : " 管理员=否"));
         return RegisterResult.success(account);
     }
 
@@ -92,13 +93,16 @@ public class IdentityService {
         String normalized = normalizeUsername(username);
         IdentityAccount account = store.findByUsername(normalized);
         if (account == null) {
+            logger.accept("[身份登录] 用户名=" + normalized + " 结果=失败");
             return new LoginResult(LOGIN_FAILED, null, "用户名或密码错误");
         }
         if (!verify(password, account.salt, account.iterations,
                 account.verifier)) {
+            logger.accept("[身份登录] 用户名=" + normalized + " 结果=失败");
             return new LoginResult(LOGIN_FAILED, null, "用户名或密码错误");
         }
         if (account.pending()) {
+            logger.accept("[身份登录] 用户名=" + normalized + " 结果=待审核");
             return new LoginResult(LOGIN_PENDING, account, "等待管理员审核");
         }
         if (!account.approved()) {
@@ -109,6 +113,7 @@ public class IdentityService {
         account.lastLoginAt = now;
         events.record(account.id, account.username, "login",
                 account.username, "");
+        logger.accept("[身份登录] 用户名=" + account.username + " 结果=成功");
         return new LoginResult(LOGIN_OK, account, "");
     }
 
@@ -123,6 +128,8 @@ public class IdentityService {
         account.updatedAt = System.currentTimeMillis();
         events.record(account.id, account.username, "approve",
                 operator, "");
+        logger.accept("[入群审核] 通过 用户名=" + account.username
+                + " 昵称=" + account.nickname + " 操作者=" + operator);
         return account;
     }
 
@@ -135,6 +142,8 @@ public class IdentityService {
         store.delete(account.id);
         events.record(account.id, account.username, "reject",
                 operator, "username released");
+        logger.accept("[入群审核] 拒绝 用户名=" + account.username
+                + " 昵称=" + account.nickname + " 操作者=" + operator);
         return account;
     }
 
