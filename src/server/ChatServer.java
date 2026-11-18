@@ -388,7 +388,7 @@ public class ChatServer implements AiReplySink {
                 clientPool.execute(handler);
             } catch (IOException e) {
                 if (running) {
-                    events.onLog("接受连接失败：" + e.getMessage());
+                    events.onError("接受连接失败", e);
                 }
             }
         }
@@ -619,7 +619,9 @@ public class ChatServer implements AiReplySink {
         Message message = null;
         try {
             message = messageService.appendSystem(content);
-            events.onLog("[#" + message.seq + "] 系统: " + content);
+            events.onLog("[#" + message.seq + "] 系统: "
+                    + ServerLogService.preview(
+                    content, config.logMessagePreviewChars));
             broadcastMessage(message, null);
         } catch (Exception e) {
             events.onLog("写入系统消息失败：" + e.getMessage());
@@ -745,7 +747,9 @@ public class ChatServer implements AiReplySink {
         Message message = messageService.appendAiMessage(aiMember, content);
         broadcastMessage(message, null);
         events.onLog("[#" + message.seq + "] "
-                + aiMember.nickname + ": " + content);
+                + aiMember.nickname + ": "
+                + ServerLogService.preview(
+                content, config.logMessagePreviewChars));
     }
 
     @Override

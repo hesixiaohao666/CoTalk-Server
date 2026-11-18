@@ -28,8 +28,10 @@ import java.util.List;
 public final class ServerRuntime {
 
     private final ServerConfig config;
-    private final ServerEvents events;
+    private final ServerEvents uiEvents;
+    private ServerEvents events;
     private final Path configPath;
+    private ServerLogService logService;
 
     private Database database;
     private Room room;
@@ -48,6 +50,7 @@ public final class ServerRuntime {
                          ServerEvents events,
                          Path configPath) {
         this.config = config;
+        this.uiEvents = events;
         this.events = events;
         this.configPath = configPath == null
                 ? ServerConfigStore.DEFAULT_PATH : configPath;
@@ -58,8 +61,15 @@ public final class ServerRuntime {
             return;
         }
 
+        startLogService();
         database = new Database(config.dbPath);
-        database.open();
+        try {
+            database.open();
+        } catch (Exception e) {
+            events.onError("数据库打开失败", e);
+            stop();
+            throw e;
+        }
         try {
             try {
                 aiProAdminService = new ai.pro.AiProAdminService(
@@ -148,7 +158,12 @@ public final class ServerRuntime {
             chatServer.setAiResponder(responder);
             chatServer.start();
             attachmentService.startMaintenance();
+            events.onLog("服务已启动：版本 " + ServerVersion.VERSION_NAME
+                    + "，端口 " + config.port
+                    + "，房间 " + room.name
+                    + "，数据库 " + config.dbPath);
         } catch (Exception e) {
+            events.onError("服务启动失败", e);
             if (attachmentService != null) {
                 attachmentService.shutdownMaintenance();
                 attachmentService = null;
@@ -180,6 +195,78 @@ public final class ServerRuntime {
         if (database != null) {
             database.close();
             database = null;
+        }
+        if (logService != null) {
+            logService.log("INFO", "server", "服务运行结束");
+            logService.close();
+            logService = null;
+        }
+        events = uiEvents;
+    }
+
+    private void startLogService() {
+        ServerLogService service = null;
+        try {
+            service = new ServerLogService(
+                    config.logDir, config.logRetainDays);
+            service.start();
+        } catch (Exception e) {
+            uiEvents.onLog("日志文件初始化失败：" + e.getMessage());
+            if (service != null) {
+                service.close();
+            }
+            service = null;
+        }
+        logService = service;
+        events = new LoggingEvents(uiEvents, service);
+    }
+
+    public ServerLogService getLogService() {
+        return logService;
+    }
+
+    /**
+     * GUI/Headless 共用：所有事件先写文件，再交给界面或终端。
+     */
+    private static final class LoggingEvents implements ServerEvents {
+        private final ServerEvents delegate;
+        private final ServerLogService logService;
+
+        LoggingEvents(ServerEvents delegate, ServerLogService logService) {
+            this.delegate = delegate;
+            this.logService = logService;
+        }
+
+        @Override
+        public void onLog(String message) {
+            if (logService != null) {
+                logService.log("INFO", "server", message);
+            }
+            delegate.onLog(message);
+        }
+
+        @Override
+        public void onError(String message, Throwable error) {
+            if (logService != null) {
+                logService.log("ERROR", "server", message, error);
+            }
+            delegate.onLog(error == null || error.getMessage() == null
+                    ? message : message + "：" + error.getMessage());
+        }
+
+        @Override
+        public void onMembersChanged(List<Member> members) {
+            delegate.onMembersChanged(members);
+        }
+
+        @Override
+        public void onStatusChanged(String status) {
+            delegate.onStatusChanged(status);
+        }
+
+        @Override
+        public void onServerAddress(String address) {
+            delegate.onServerAddress(address);
         }
     }
 

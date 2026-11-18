@@ -3,13 +3,8 @@ package server;
 import model.Member;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -21,23 +16,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class HeadlessConsole {
 
-    private static final Object LOG_LOCK = new Object();
-    private static BufferedWriter logWriter;
-
     private HeadlessConsole() {
     }
 
     public static void run(String[] args) {
         System.setProperty("java.awt.headless", "true");
         boolean noConsole = hasArg(args, "--no-console");
-        openLogFile();
 
         ServerConfigStore.LoadResult result;
         try {
             result = ServerConfigStore.loadOrCreate();
         } catch (Exception e) {
             log("读取/生成配置失败：" + e.getMessage());
-            closeLog();
             System.exit(1);
             return;
         }
@@ -86,7 +76,6 @@ public final class HeadlessConsole {
         } catch (Exception e) {
             log("启动失败：" + e.getMessage());
             runtime.stop();
-            closeLog();
             System.exit(1);
             return;
         }
@@ -98,8 +87,7 @@ public final class HeadlessConsole {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             if (stopping.compareAndSet(false, true)) {
                 runtime.stop();
-                closeLog();
-            }
+                }
         }));
 
         if (!noConsole) {
@@ -121,7 +109,6 @@ public final class HeadlessConsole {
             if (stopping.compareAndSet(false, true)) {
                 runtime.stop();
             }
-            closeLog();
         }
     }
 
@@ -169,49 +156,11 @@ public final class HeadlessConsole {
         return false;
     }
 
-    private static void openLogFile() {
-        try {
-            Path path = Paths.get("logs", "server.log");
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
-            }
-            logWriter = Files.newBufferedWriter(
-                    path,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-        } catch (Exception e) {
-            System.err.println("无法写入 logs/server.log：" + e.getMessage());
-        }
-    }
-
+    /**
+     * 终端只负责控制台输出；文件日志统一由 ServerRuntime/ServerLogService 写入。
+     */
     private static void log(String message) {
-        String line = "[" + new SimpleDateFormat("HH:mm:ss").format(new Date())
-                + "] " + message;
-        System.out.println(line);
-        synchronized (LOG_LOCK) {
-            if (logWriter != null) {
-                try {
-                    logWriter.write(line);
-                    logWriter.newLine();
-                    logWriter.flush();
-                } catch (Exception ignored) {
-                    // 控制台已输出，文件日志失败不阻塞服务
-                }
-            }
-        }
-    }
-
-    private static void closeLog() {
-        synchronized (LOG_LOCK) {
-            if (logWriter != null) {
-                try {
-                    logWriter.close();
-                } catch (Exception ignored) {
-                    // ignore
-                }
-                logWriter = null;
-            }
-        }
+        System.out.println("[" + new SimpleDateFormat("HH:mm:ss")
+                .format(new Date()) + "] " + message);
     }
 }

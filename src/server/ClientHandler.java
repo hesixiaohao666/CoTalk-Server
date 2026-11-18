@@ -156,7 +156,7 @@ public class ClientHandler implements Runnable {
             }
         } catch (Exception e) {
             if (!closed.get()) {
-                server.getEvents().onLog("客户端处理异常：" + e.getMessage());
+                server.getEvents().onError("客户端处理异常", e);
             }
         } finally {
             close();
@@ -936,7 +936,9 @@ public class ClientHandler implements Runnable {
         sendAck(ack, reqId);
         server.broadcastMessage(message, this);
         server.getEvents().onLog("[#" + seq + "] "
-                + member.nickname + ": " + logPreview);
+                + member.nickname + ": "
+                + ServerLogService.preview(
+                logPreview, config.logMessagePreviewChars));
     }
 
     /**

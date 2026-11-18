@@ -8,38 +8,59 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 服务端文件日志骨架：日期+同日序号、按日轮转、保留天数与敏感字段脱敏。
+ * 服务端文件日志：日期+同日序号、按日轮转、保留天数与敏感字段脱敏。
+ * GUI 与 Headless 共用同一实例，由 ServerRuntime 注入。
  */
 public final class ServerLogService {
 
     private static final DateTimeFormatter DATE =
             DateTimeFormatter.ofPattern("yyyyMMdd");
-    private static final Pattern SENSITIVE = Pattern.compile(
-            "(?i)(password|passwd|pwd|proof|authKey|apiKey|token|"
-                    + "verifier|secret)\\s*[=:]\\s*([^\\s,;]+)");
+    private static final DateTimeFormatter TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Pattern JSON_SENSITIVE = Pattern.compile(
+            "(?i)(\"(?:password|passwd|pwd|proof|auth[_-]?key|"
+                    + "api[_-]?key|access[_-]?token|token|verifier|secret)\""
+                    + "\\s*:\\s*\")([^\"]*)(\")");
+    private static final Pattern KV_SENSITIVE = Pattern.compile(
+            "(?i)\\b(password|passwd|pwd|proof|auth[_-]?key|"
+                    + "api[_-]?key|access[_-]?token|token|verifier|secret)\\b"
+                    + "(\\s*[=:]\\s*)([^\\s,;}\\]]+)");
+    private static final Pattern BEARER = Pattern.compile(
+            "(?i)(Bearer\\s+)\\S+");
+    private static final Pattern API_KEY_VALUE = Pattern.compile(
+            "\\bsk-[A-Za-z0-9_-]{8,}\\b");
 
     private final Path directory;
     private final int retainDays;
+    private final Clock clock;
     private BufferedWriter writer;
     private LocalDate currentDate;
     private int sequence;
 
     public ServerLogService(String directory, int retainDays) {
+        this(directory, retainDays, Clock.systemDefaultZone());
+    }
+
+    public ServerLogService(String directory, int retainDays, Clock clock) {
         this.directory = Paths.get(directory == null || directory.trim().isEmpty()
                 ? "logs" : directory.trim()).toAbsolutePath().normalize();
         this.retainDays = Math.max(1, retainDays);
+        this.clock = clock == null ? Clock.systemDefaultZone() : clock;
     }
 
     public synchronized void start() throws IOException {
         Files.createDirectories(directory);
-        openFor(LocalDate.now());
-        cleanupOldFiles(LocalDate.now());
+        LocalDate today = LocalDate.now(clock);
+        openFor(today);
+        cleanupOldFiles(today);
     }
 
     public synchronized void close() {
@@ -57,23 +78,50 @@ public final class ServerLogService {
                                  String category,
                                  String message) {
         try {
-            LocalDate today = LocalDate.now();
+            LocalDate today = LocalDate.now(clock);
             if (writer == null || currentDate == null
                     || !today.equals(currentDate)) {
                 close();
                 openFor(today);
                 cleanupOldFiles(today);
             }
-            String line = "[" + java.time.LocalDateTime.now()
-                    .format(DateTimeFormatter.ofPattern(
-                            "yyyy-MM-dd HH:mm:ss")) + "] ["
-                    + (level == null ? "INFO" : level) + "] ["
-                    + (category == null ? "server" : category) + "] "
-                    + sanitize(message) + "\n";
-            writer.write(line);
+            writer.write(line(level, category, sanitize(message)));
             writer.flush();
         } catch (Exception ignored) {
             // 日志失败不影响服务运行
+        }
+    }
+
+    public synchronized void log(String level,
+                                 String category,
+                                 String message,
+                                 Throwable error) {
+        log(level, category, message);
+        if (error == null) {
+            return;
+        }
+        try {
+            LocalDate today = LocalDate.now(clock);
+            if (writer == null || currentDate == null
+                    || !today.equals(currentDate)) {
+                close();
+                openFor(today);
+                cleanupOldFiles(today);
+            }
+            writer.write(line(level, category + "/stack",
+                    sanitize(error.toString())));
+            for (StackTraceElement element : error.getStackTrace()) {
+                writer.write(line(level, category + "/stack",
+                        "  at " + sanitize(element.toString())));
+            }
+            Throwable cause = error.getCause();
+            if (cause != null && cause != error) {
+                writer.write(line(level, category + "/stack",
+                        "Caused by: " + sanitize(cause.toString())));
+            }
+            writer.flush();
+        } catch (Exception ignored) {
+            // ignore
         }
     }
 
@@ -96,14 +144,48 @@ public final class ServerLogService {
         if (message == null || message.isEmpty()) {
             return "";
         }
-        Matcher matcher = SENSITIVE.matcher(message);
+        Matcher json = JSON_SENSITIVE.matcher(message);
         StringBuffer buffer = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(buffer,
-                    matcher.group(1) + "=***");
+        while (json.find()) {
+            json.appendReplacement(buffer, Matcher.quoteReplacement(
+                    json.group(1) + "***" + json.group(3)));
         }
-        matcher.appendTail(buffer);
-        return buffer.toString();
+        json.appendTail(buffer);
+
+        Matcher kv = KV_SENSITIVE.matcher(buffer.toString());
+        StringBuffer kvBuffer = new StringBuffer();
+        while (kv.find()) {
+            kv.appendReplacement(kvBuffer, Matcher.quoteReplacement(
+                    kv.group(1) + kv.group(2) + "***"));
+        }
+        kv.appendTail(kvBuffer);
+
+        Matcher bearer = BEARER.matcher(kvBuffer.toString());
+        String bearerValue = bearer.replaceAll("$1***");
+        return API_KEY_VALUE.matcher(bearerValue).replaceAll("sk-***");
+    }
+
+    /**
+     * 消息预览：单行化并限制字符数，避免日志写入完整消息正文。
+     */
+    public static String preview(String message, int maxChars) {
+        if (message == null || message.isEmpty()) {
+            return "";
+        }
+        String value = message.replace('\r', ' ').replace('\n', ' ').trim();
+        int limit = Math.max(1, maxChars);
+        if (value.codePointCount(0, value.length()) <= limit) {
+            return value;
+        }
+        int end = value.offsetByCodePoints(0, limit);
+        return value.substring(0, end) + "…";
+    }
+
+    private String line(String level, String category, String message) {
+        return "[" + LocalDateTime.now(clock).format(TIME) + "] ["
+                + (level == null || level.isEmpty() ? "INFO" : level)
+                + "] [" + (category == null || category.isEmpty()
+                ? "server" : category) + "] " + message + "\n";
     }
 
     private void openFor(LocalDate date) throws IOException {
@@ -139,7 +221,7 @@ public final class ServerLogService {
     }
 
     private void cleanupOldFiles(LocalDate today) throws IOException {
-        LocalDate cutoff = today.minusDays(retainDays);
+        LocalDate cutoff = today.minusDays(Math.max(0, retainDays - 1));
         try (DirectoryStream<Path> stream =
                      Files.newDirectoryStream(directory, "*.log")) {
             for (Path path : stream) {
