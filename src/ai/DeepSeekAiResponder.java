@@ -70,8 +70,13 @@ public class DeepSeekAiResponder implements AiResponder {
         this.client = client;
         this.sink = sink;
         this.imageResolver = imageResolver;
+        int configuredEmoji = config.aiPro == null
+                ? AiReplyParser.DEFAULT_MAX_CONSECUTIVE_EMOJI
+                : config.aiPro.getInt("ai.pro.emoji.maxConsecutive");
         this.replyParser = new AiReplyParser(
-                config.aiMaxMessages, config.aiMessageMaxChars);
+                config.aiMaxMessages, config.aiMessageMaxChars,
+                Math.min(AiReplyParser.DEFAULT_MAX_CONSECUTIVE_EMOJI,
+                        configuredEmoji));
         List<String> configuredMentions = splitMentions(config.aiMentions);
         this.directMentions = directMentions(configuredMentions);
         this.keywords = keywords(
@@ -101,8 +106,12 @@ public class DeepSeekAiResponder implements AiResponder {
         if (closed || sender == null || message == null || sender.ai) {
             return;
         }
-        boolean mandatory = containsAny(message.content, directMentions);
-        boolean keyword = !mandatory && containsAny(message.content, keywords);
+        if (isMediaMessage(message) && !mediaTriggersEnabled()) {
+            return;
+        }
+        String content = message.content == null ? "" : message.content;
+        boolean mandatory = containsAny(content, directMentions);
+        boolean keyword = !mandatory && containsAny(content, keywords);
         boolean triggered = mandatory
                 || (keyword
                 ? hit(config.aiKeywordChance)
@@ -116,18 +125,50 @@ public class DeepSeekAiResponder implements AiResponder {
             pendingContext = recentContext == null
                     ? Collections.emptyList()
                     : new ArrayList<>(recentContext);
-            if (!triggered) {
+        }
+        if (!triggered) {
+            return;
+        }
+        String line = AiDisplayName.of(sender) + "：" + content.trim();
+        if (line.length() > 500) {
+            line = line.substring(0, 500) + "…";
+        }
+        enqueueTrigger(line, mandatory, recentContext);
+    }
+
+    /**
+     * 图片/表情是否可概率触发回复；经典 AI 保持不触发，Pro 覆写。
+     */
+    protected boolean mediaTriggersEnabled() {
+        return false;
+    }
+
+    protected static boolean isMediaMessage(Message message) {
+        return message != null
+                && ("image".equals(message.type)
+                || "emoji".equals(message.type));
+    }
+
+    /**
+     * 供 Pro 的系统消息、拍一拍等事件加入待回复队列。
+     */
+    protected void enqueueTrigger(String line,
+                                  boolean mandatory,
+                                  List<Message> recentContext) {
+        if (closed || line == null || line.trim().isEmpty()) {
+            return;
+        }
+        synchronized (lock) {
+            if (closed) {
                 return;
             }
-            String line = sender.nickname + "：" + message.content.trim();
-            if (line.length() > 500) {
-                line = line.substring(0, 500) + "…";
+            if (recentContext != null) {
+                pendingContext = new ArrayList<>(recentContext);
             }
             pendingMessages.add(line);
             if (mandatory) {
                 pendingMandatory = true;
             }
-
             if (pendingTask != null) {
                 pendingTask.cancel(false);
             }
@@ -252,21 +293,21 @@ public class DeepSeekAiResponder implements AiResponder {
                 }
                 reply = replyParser.parse(repaired.content);
             }
-            if (reply == null || !reply.send || reply.messages.isEmpty()) {
+            if (reply == null || !reply.send || reply.actions.isEmpty()) {
                 if (mandatory) {
                     sendMandatoryFallback();
                 }
                 return;
             }
 
-            for (int i = 0; i < reply.messages.size(); i++) {
+            for (int i = 0; i < reply.actions.size(); i++) {
                 if (closed) {
                     return;
                 }
                 if (i > 0 && config.aiReplyDelayMs > 0) {
                     Thread.sleep(config.aiReplyDelayMs);
                 }
-                sendReplyMessage(reply.messages.get(i));
+                sendAction(reply.actions.get(i));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -386,11 +427,30 @@ public class DeepSeekAiResponder implements AiResponder {
                     || message.fileId == null || message.fileId.isEmpty()) {
                 continue;
             }
-            if ("image".equals(message.type) || "emoji".equals(message.type)) {
+            if (("image".equals(message.type)
+                    || "emoji".equals(message.type)) && !isGif(message)) {
                 result.add(message.fileId);
             }
         }
         return result;
+    }
+
+    /**
+     * GIF 只作为文字占位，不送视觉模型。
+     */
+    public static boolean isGif(Message message) {
+        if (message == null || message.fileMime == null) {
+            return false;
+        }
+        return message.fileMime.toLowerCase(Locale.ROOT).contains("gif");
+    }
+
+    protected static String mediaLabel(Message message) {
+        if (isGif(message)) {
+            return "[GIF表情]";
+        }
+        return message != null && "image".equals(message.type)
+                ? "[图片]" : "[表情]";
     }
 
     /**
@@ -427,6 +487,24 @@ public class DeepSeekAiResponder implements AiResponder {
      */
     protected void sendReplyMessage(String content) throws Exception {
         sink.appendAiMessage(content);
+    }
+
+    /**
+     * 表情动作发送；经典 AI 不支持，直接忽略。
+     */
+    protected boolean sendEmojiAction(String emojiId) throws Exception {
+        return false;
+    }
+
+    private void sendAction(AiReplyAction action) throws Exception {
+        if (action == null) {
+            return;
+        }
+        if (action.isEmoji()) {
+            sendEmojiAction(action.emojiId);
+        } else {
+            sendReplyMessage(action.content);
+        }
     }
 
     private List<AiMessage> buildRequestMessages(List<String> mergedMessages,
@@ -466,10 +544,8 @@ public class DeepSeekAiResponder implements AiResponder {
             }
 
             if ("image".equals(message.type) || "emoji".equals(message.type)) {
-                String label = "image".equals(message.type)
-                        ? "[图片]" : "[表情]";
-                String sender = message.senderName == null
-                        ? "成员" : message.senderName;
+                String label = mediaLabel(message);
+                String sender = AiDisplayName.of(message);
                 StringBuilder text = new StringBuilder(sender)
                         .append("：").append(label);
                 if (message.content != null
@@ -495,9 +571,8 @@ public class DeepSeekAiResponder implements AiResponder {
             }
 
             if ("voice".equals(message.type)) {
-                String sender = message.senderName == null
-                        ? "成员" : message.senderName;
-                result.add(new AiMessage("user", sender + "：[语音]"));
+                result.add(new AiMessage("user",
+                        AiDisplayName.of(message) + "：[语音]"));
                 continue;
             }
 
@@ -509,7 +584,7 @@ public class DeepSeekAiResponder implements AiResponder {
                 result.add(new AiMessage("assistant", message.content));
             } else {
                 result.add(new AiMessage("user",
-                        message.senderName + "：" + message.content));
+                        AiDisplayName.of(message) + "：" + message.content));
             }
         }
 
@@ -600,7 +675,7 @@ public class DeepSeekAiResponder implements AiResponder {
         }
     }
 
-    private static boolean hit(int percent) {
+    protected static boolean hit(int percent) {
         if (percent <= 0) {
             return false;
         }

@@ -17,7 +17,7 @@ import java.util.List;
 public class MessageStore {
 
     private static final String COLUMNS =
-            "msg_uuid, seq, sender_id, sender_name, sender_tag, "
+            "msg_uuid, seq, sender_id, sender_name, sender_username, sender_tag, "
                     + "sender_avatar_version, content, msg_type, "
                     + "file_id, file_name, file_mime, file_size, file_expired, "
                     + "recalled, recall_notice, sender_admin, created_at";
@@ -70,25 +70,27 @@ public class MessageStore {
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO message(msg_uuid, seq, sender_id, sender_name, "
-                        + "sender_tag, sender_avatar_version, content, msg_type, "
+                        + "sender_username, sender_tag, sender_avatar_version, "
+                        + "content, msg_type, "
                         + "file_id, file_name, file_mime, file_size, "
                         + "file_expired, sender_admin, created_at) "
-                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setString(1, message.msgUuid);
             statement.setLong(2, message.seq);
             statement.setString(3, message.senderId);
             statement.setString(4, message.senderName);
-            statement.setString(5, message.senderTag);
-            statement.setInt(6, message.senderAvatarVersion);
-            statement.setString(7, message.content);
-            statement.setString(8, message.type);
-            statement.setString(9, message.fileId);
-            statement.setString(10, message.fileName);
-            statement.setString(11, message.fileMime);
-            statement.setLong(12, message.fileSize);
-            statement.setInt(13, message.fileExpired ? 1 : 0);
-            statement.setInt(14, message.senderAdmin ? 1 : 0);
-            statement.setLong(15, message.createdAt);
+            statement.setString(5, message.senderUsername);
+            statement.setString(6, message.senderTag);
+            statement.setInt(7, message.senderAvatarVersion);
+            statement.setString(8, message.content);
+            statement.setString(9, message.type);
+            statement.setString(10, message.fileId);
+            statement.setString(11, message.fileName);
+            statement.setString(12, message.fileMime);
+            statement.setLong(13, message.fileSize);
+            statement.setInt(14, message.fileExpired ? 1 : 0);
+            statement.setInt(15, message.senderAdmin ? 1 : 0);
+            statement.setLong(16, message.createdAt);
             statement.executeUpdate();
         }
     }
@@ -244,6 +246,7 @@ public class MessageStore {
             message.seq = result.getLong("seq");
             message.senderId = result.getString("sender_id");
             message.senderName = result.getString("sender_name");
+            message.senderUsername = result.getString("sender_username");
             message.senderTag = result.getString("sender_tag");
             message.senderAvatarVersion = result.getInt("sender_avatar_version");
             message.content = result.getString("content");

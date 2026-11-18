@@ -103,9 +103,12 @@ public class AiEmojiService {
             return "";
         }
         StringBuilder builder = new StringBuilder();
-        builder.append("【表情候选】（可选，最多选 1 个；不选则完全省略）\n");
+        builder.append("【表情候选】（通过 actions 中的 emoji 动作发送，"
+                + "最多连续 ").append(
+                config.getInt("ai.pro.emoji.maxConsecutive"))
+                .append(" 个；不选则完全省略）\n");
         for (AiEmoji emoji : candidates) {
-            builder.append("- [[emoji:").append(emoji.emojiId).append("]] ")
+            builder.append("- id=").append(emoji.emojiId).append("，")
                     .append(emoji.name);
             List<String> tags = new ArrayList<>(
                     MemoryText.listValues(emoji.tags));

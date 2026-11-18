@@ -605,16 +605,52 @@ public class ChatServer implements AiReplySink {
      * 持久化的系统消息（加入/离开），走 message(type=system)。
      */
     public void broadcastSystemMessage(String content) {
+        broadcastSystemMessage(content, true);
+    }
+
+    /**
+     * @param triggerAi 是否允许普通系统消息概率触发 AI 回复。
+     *                  拍一拍广播与 AI 失败提示必须传 false，避免重复或回环。
+     */
+    public void broadcastSystemMessage(String content, boolean triggerAi) {
         if (!running) {
             return;
         }
+        Message message = null;
         try {
-            Message message = messageService.appendSystem(content);
+            message = messageService.appendSystem(content);
             events.onLog("[#" + message.seq + "] 系统: " + content);
             broadcastMessage(message, null);
         } catch (Exception e) {
             events.onLog("写入系统消息失败：" + e.getMessage());
             broadcastSystem(content);
+        }
+        if (triggerAi && message != null) {
+            onSystemMessage(message);
+        }
+    }
+
+    public void onSystemMessage(Message message) {
+        AiResponder responder = aiResponder;
+        if (responder == null || !responder.isActive()) {
+            return;
+        }
+        try {
+            responder.onSystemMessage(message);
+        } catch (Exception e) {
+            events.onLog("AI 系统消息钩子异常：" + e.getMessage());
+        }
+    }
+
+    public void onPokeAi(Member sender, Member target) {
+        AiResponder responder = aiResponder;
+        if (responder == null || !responder.isActive()) {
+            return;
+        }
+        try {
+            responder.onPokeAi(sender, target);
+        } catch (Exception e) {
+            events.onLog("AI 拍一拍钩子异常：" + e.getMessage());
         }
     }
 
@@ -734,7 +770,8 @@ public class ChatServer implements AiReplySink {
         if (!running) {
             return;
         }
-        broadcastSystemMessage(message);
+        // AI 失败提示不应再次触发 AI，避免回环。
+        broadcastSystemMessage(message, false);
     }
 
     @Override

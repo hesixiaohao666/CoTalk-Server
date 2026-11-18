@@ -27,5 +27,17 @@ public interface AiResponder {
     default void onEmojiMessage(Member sender, Message message) {
     }
 
+    /**
+     * 系统消息（加入/离开/提示等）写入后的通知；默认不触发回复。
+     */
+    default void onSystemMessage(Message message) {
+    }
+
+    /**
+     * 用户拍一拍 AI 成员。AI Pro 视为一次 @AI 必回事件。
+     */
+    default void onPokeAi(Member sender, Member aiMember) {
+    }
+
     void shutdown();
 }

@@ -56,6 +56,7 @@ public class Database implements AutoCloseable {
                     + "seq INTEGER NOT NULL UNIQUE, "
                     + "sender_id TEXT NOT NULL, "
                     + "sender_name TEXT NOT NULL, "
+                    + "sender_username TEXT, "
                     + "sender_tag TEXT, "
                     + "sender_avatar_version INTEGER NOT NULL DEFAULT 0, "
                     + "content TEXT NOT NULL, "
@@ -130,6 +131,8 @@ public class Database implements AutoCloseable {
             addColumnIfMissing(statement, "message", "recall_notice", "TEXT");
             addColumnIfMissing(statement, "message", "sender_admin",
                     "INTEGER NOT NULL DEFAULT 0");
+            // v3300：AI 上下文识别稳定身份，旧消息保持空用户名。
+            addColumnIfMissing(statement, "message", "sender_username", "TEXT");
 
             syncAiProMeta(statement);
 

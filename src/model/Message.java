@@ -9,6 +9,7 @@ public class Message {
     public long seq;
     public String senderId;
     public String senderName;
+    public String senderUsername;
     public String senderTag;
     public int senderAvatarVersion;
     public String content;

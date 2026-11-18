@@ -914,6 +914,8 @@ public class ClientHandler implements Runnable {
             if ("emoji".equals(type)) {
                 server.onEmojiMessage(member, message);
             }
+            // 图片/表情可概率触发 AI 参与；语音仍不触发。
+            server.onChatMessage(member, message);
         } catch (Exception e) {
             if (saved != null && !stored) {
                 attachmentService.delete(saved.fileId);
@@ -987,7 +989,12 @@ public class ClientHandler implements Runnable {
                 ? "" : target.signature.trim();
         String notice = member.nickname + " 拍了拍 " + target.nickname
                 + (signature.isEmpty() ? "" : "，" + signature);
-        server.broadcastSystemMessage(notice);
+        // 拍一拍的系统广播不参与普通系统消息概率触发；
+        // 目标是 AI 时由 Pro 钩子单独作为必回事件处理。
+        server.broadcastSystemMessage(notice, false);
+        if (target.ai) {
+            server.onPokeAi(member, target);
+        }
     }
 
     private void handleAdminAuthBegin(JsonObject data, String reqId) {

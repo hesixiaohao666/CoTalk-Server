@@ -267,14 +267,17 @@ public final class MemoryExtractor {
                         message.senderId)) {
                     sender = "[AI自己]";
                 } else {
-                    sender = message.senderName == null
-                            ? "成员" : message.senderName;
+                    sender = ai.AiDisplayName.of(message);
                 }
                 String content;
                 if ("image".equals(message.type)) {
-                    content = "[图片] " + nullToEmpty(message.content);
+                    content = ai.DeepSeekAiResponder.isGif(message)
+                            ? "[GIF表情] " + nullToEmpty(message.content)
+                            : "[图片] " + nullToEmpty(message.content);
                 } else if ("emoji".equals(message.type)) {
-                    content = "[表情] " + nullToEmpty(message.content);
+                    content = ai.DeepSeekAiResponder.isGif(message)
+                            ? "[GIF表情] " + nullToEmpty(message.content)
+                            : "[表情] " + nullToEmpty(message.content);
                 } else if ("voice".equals(message.type)) {
                     content = "[语音]";
                 } else {

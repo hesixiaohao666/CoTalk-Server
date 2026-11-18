@@ -1,5 +1,6 @@
 package ai.pro;
 
+import ai.AiDisplayName;
 import ai.AiImageResolver;
 import ai.AiMessage;
 import ai.AiReplySink;
@@ -36,6 +37,7 @@ public class AiProResponder extends DeepSeekAiResponder {
     private final AiEmojiService emojiService;
     private final AiTodoService todoService;
     private final AiProSearchService searchService;
+    private final MessageService messageService;
     private static final Pattern EMOJI_TOKEN = Pattern.compile(
             "\\[\\[emoji:([A-Za-z0-9_-]+)]]");
 
@@ -69,6 +71,7 @@ public class AiProResponder extends DeepSeekAiResponder {
                           AttachmentService attachmentService) {
         super(config, client, sink, imageResolver);
         this.coreMemoryStore = coreMemoryStore;
+        this.messageService = messageService;
         if (database != null && messageService != null) {
             this.memoryStore = new MemoryStore(database);
             this.indexManager = new MemoryIndexManager(memoryStore);
@@ -180,6 +183,50 @@ public class AiProResponder extends DeepSeekAiResponder {
     }
 
     @Override
+    protected boolean mediaTriggersEnabled() {
+        return config.aiPro.getBoolean("ai.pro.trigger.images");
+    }
+
+    @Override
+    public void onSystemMessage(Message message) {
+        if (message == null || message.content == null
+                || message.content.trim().isEmpty()) {
+            return;
+        }
+        if (!config.aiPro.getBoolean("ai.pro.trigger.systemMessages")) {
+            return;
+        }
+        // 普通系统消息只按随机概率参与，不视为 @ 必回。
+        if (!hit(scheduleChance())) {
+            return;
+        }
+        enqueueTrigger("[系统] " + message.content.trim(), false,
+                recentContext());
+    }
+
+    @Override
+    public void onPokeAi(Member sender, Member aiMember) {
+        if (sender == null || sender.ai) {
+            return;
+        }
+        // 拍一拍 AI 等价于一次 @AI，Pro 必回。
+        enqueueTrigger("[拍一拍] " + AiDisplayName.of(sender)
+                + " 拍了拍 AI", true, recentContext());
+    }
+
+    private List<Message> recentContext() {
+        if (messageService == null) {
+            return Collections.emptyList();
+        }
+        try {
+            return messageService.recent(config.aiMaxContext);
+        } catch (Exception e) {
+            sink.reportError("AI Pro 读取上下文失败：" + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
     protected List<AiMessage> buildExtraUserMessages(
             List<String> mergedMessages,
             List<Message> context) {
@@ -282,14 +329,12 @@ public class AiProResponder extends DeepSeekAiResponder {
                 if (message == null || "system".equals(message.type)) {
                     continue;
                 }
-                String sender = message.senderName == null
-                        ? "成员" : message.senderName;
+                String sender = AiDisplayName.of(message);
                 String content = message.content == null
                         ? "" : message.content;
-                if ("image".equals(message.type)) {
-                    content = "[图片] " + content;
-                } else if ("emoji".equals(message.type)) {
-                    content = "[表情] " + content;
+                if ("image".equals(message.type)
+                        || "emoji".equals(message.type)) {
+                    content = mediaLabel(message) + " " + content;
                 } else if ("voice".equals(message.type)) {
                     content = "[语音]";
                 }
@@ -310,6 +355,11 @@ public class AiProResponder extends DeepSeekAiResponder {
             }
         }
         return tags;
+    }
+
+    @Override
+    protected boolean sendEmojiAction(String emojiId) throws Exception {
+        return emojiService != null && emojiService.send(emojiId, null);
     }
 
     @Override

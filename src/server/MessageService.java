@@ -76,6 +76,7 @@ public class MessageService {
         message.seq = nextSeq;
         message.senderId = sender.id;
         message.senderName = sender.nickname;
+        message.senderUsername = sender.username;
         message.senderTag = clientTag;
         message.senderAvatarVersion = sender.avatarVersion;
         message.senderAdmin = sender.admin;
