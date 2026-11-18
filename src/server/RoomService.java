@@ -44,9 +44,22 @@ public class RoomService {
                     .replace("-", "")
                     .substring(0, 12);
         } while (online.containsKey(id));
+        return joinWithId(id, nickname, signature, ip);
+    }
 
+    /**
+     * 身份模式使用稳定身份 ID，保证在线/离线成员与踢出操作一致。
+     */
+    public Member joinWithId(String id,
+                             String nickname,
+                             String signature,
+                             String ip) {
+        String memberId = id == null || id.trim().isEmpty()
+                ? "u-" + UUID.randomUUID().toString()
+                .replace("-", "").substring(0, 12)
+                : id.trim();
         Member member = new Member(
-                id,
+                memberId,
                 nickname,
                 signature,
                 0,
@@ -54,7 +67,7 @@ public class RoomService {
                 ip,
                 System.currentTimeMillis()
         );
-        online.put(id, member);
+        online.put(memberId, member);
         return member;
     }
 

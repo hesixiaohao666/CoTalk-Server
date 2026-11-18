@@ -84,6 +84,9 @@ public final class HeadlessCommandProcessor {
             case "aipro":
                 aipro(rest);
                 return true;
+            case "identity":
+                identity(rest);
+                return true;
             case "ai":
                 ai(rest);
                 return true;
@@ -100,6 +103,7 @@ public final class HeadlessCommandProcessor {
             log("  help server   服务运行、成员与广播");
             log("  help config   配置查询、修改与保存");
             log("  help aipro    AI Pro 管理");
+        log("  help identity 群聊身份与入群审核");
             log("  help ai       AI 状态");
             log("  help danger   危险操作");
             log("  help all      显示全部命令");
@@ -112,6 +116,8 @@ public final class HeadlessCommandProcessor {
             helpConfig();
             log("");
             helpAipro();
+            log("");
+            helpIdentity();
             log("");
             helpAi();
             log("");
@@ -127,6 +133,9 @@ public final class HeadlessCommandProcessor {
                 return;
             case "aipro":
                 helpAipro();
+                return;
+            case "identity":
+                helpIdentity();
                 return;
             case "ai":
                 helpAi();
@@ -182,6 +191,15 @@ public final class HeadlessCommandProcessor {
         log("  aipro emotion [reset]");
         log("  aipro search status|reset");
         log("删除记忆和清空记忆需要再次输入 yes 确认。");
+    }
+
+    private void helpIdentity() {
+        log("群聊身份命令：");
+        log("  identity pending              查看待审核申请");
+        log("  identity list                 查看已通过成员");
+        log("  identity approve <id|用户名>  通过申请");
+        log("  identity reject <id|用户名>   拒绝申请并释放用户名");
+        log("  identity kick <id|用户名>     移出成员并释放用户名");
     }
 
     private void helpAi() {
@@ -396,6 +414,77 @@ public final class HeadlessCommandProcessor {
         String suggestion = HeadlessConfigCatalog.suggest(key);
         log("未知配置项：" + key
                 + (suggestion == null ? "" : "，是否想输入 " + suggestion));
+    }
+
+    private void identity(String rest) {
+        IdentityService service = runtime.getIdentityService();
+        if (service == null) {
+            log("身份服务未初始化");
+            return;
+        }
+        String value = rest == null ? "" : rest.trim();
+        String[] parts = value.split("\s+", 3);
+        String sub = parts.length == 0 ? ""
+                : parts[0].toLowerCase(Locale.ROOT);
+        if ("pending".equals(sub)) {
+            try {
+                for (model.IdentityAccount account : service.pending(200)) {
+                    log(account.id + " " + account.username + " "
+                            + account.nickname + " 申请时间 "
+                            + account.createdAt + (account.admin
+                            ? " [管理员]" : ""));
+                }
+            } catch (Exception e) {
+                log("读取申请失败：" + e.getMessage());
+            }
+            return;
+        }
+        if ("list".equals(sub)) {
+            try {
+                for (model.IdentityAccount account : service.approved(100000)) {
+                    log(account.id + " " + account.username + " "
+                            + account.nickname + (account.admin
+                            ? " [管理员]" : ""));
+                }
+            } catch (Exception e) {
+                log("读取成员失败：" + e.getMessage());
+            }
+            return;
+        }
+        if ("approve".equals(sub) || "reject".equals(sub)
+                || "kick".equals(sub)) {
+            String target = parts.length > 1 ? parts[1] : "";
+            if (target.isEmpty()) {
+                log("用法：identity " + sub + " <id|用户名>");
+                return;
+            }
+            try {
+                model.IdentityAccount account = service.findById(target);
+                if (account == null) {
+                    account = service.findByUsername(target);
+                }
+                if (account == null) {
+                    log("未找到身份：" + target);
+                    return;
+                }
+                if ("approve".equals(sub)) {
+                    model.IdentityAccount approved = service.approve(
+                            account.id, OPERATOR);
+                    runtime.notifyIdentityApproved(approved);
+                    log("已通过入群申请：" + account.username);
+                } else if ("reject".equals(sub)) {
+                    service.reject(account.id, OPERATOR);
+                    log("已拒绝入群申请：" + account.username);
+                } else {
+                    runtime.kickIdentity(account.id, OPERATOR);
+                    log("已移出成员：" + account.username);
+                }
+            } catch (Exception e) {
+                log("身份操作失败：" + e.getMessage());
+            }
+            return;
+        }
+        log("用法：identity pending|list|approve|reject|kick");
     }
 
     private void aipro(String rest) {

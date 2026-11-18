@@ -535,7 +535,8 @@ public class CoTalkServer extends JFrame {
             ServerSettingsDialog dialog = new ServerSettingsDialog(
                     this, loaded.config, loaded.path,
                     runtime == null ? null
-                            : runtime.getAiProAdminService());
+                            : runtime.getAiProAdminService(),
+                    runtime);
             ServerConfig saved = dialog.showDialog();
             if (saved != null) {
                 appendLog("配置已保存：" + loaded.path);

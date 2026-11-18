@@ -29,6 +29,7 @@ public class ServerSettingsDialog extends JDialog {
     private final ServerConfig original;
     private final Path configPath;
     private final ai.pro.AiProAdminService aiProAdminService;
+    private final ServerRuntime runtime;
     private ServerConfig savedConfig;
 
     private final JTextField portField = new JTextField(10);
@@ -102,10 +103,19 @@ public class ServerSettingsDialog extends JDialog {
                                 ServerConfig config,
                                 Path configPath,
                                 ai.pro.AiProAdminService aiProAdminService) {
+        this(owner, config, configPath, aiProAdminService, null);
+    }
+
+    public ServerSettingsDialog(Window owner,
+                                ServerConfig config,
+                                Path configPath,
+                                ai.pro.AiProAdminService aiProAdminService,
+                                ServerRuntime runtime) {
         super(owner, "CoTalk 服务器设置", ModalityType.APPLICATION_MODAL);
         this.original = config;
         this.configPath = configPath;
         this.aiProAdminService = aiProAdminService;
+        this.runtime = runtime;
         this.aiProAdvancedPanel = new ai.pro.AiProAdvancedPanel(config.aiPro);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setContentPane(buildContent());
@@ -328,6 +338,14 @@ public class ServerSettingsDialog extends JDialog {
         keyRow.add(keyActions, BorderLayout.EAST);
         addRow(panel, row++, "设置新密钥", keyRow,
                 "留空保留现有密钥");
+        if (runtime != null && runtime.getConfig().adminEnabled) {
+            JButton moderation = new JButton("成员与审核");
+            moderation.addActionListener(e ->
+                    new ServerModerationDialog(this, runtime)
+                            .setVisible(true));
+            addRow(panel, row++, "群聊身份", moderation,
+                    "入群审核与移除用户");
+        }
 
         addNote(panel, row++,
                 "管理员模式为实验性功能。");

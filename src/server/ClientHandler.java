@@ -267,6 +267,15 @@ public class ClientHandler implements Runnable {
             case Protocol.ADMIN_UNBIND:
                 handleAdminUnbind(data, reqId);
                 return true;
+            case Protocol.ADMIN_JOIN_REQUESTS_REQ:
+                handleAdminJoinRequests(reqId);
+                return true;
+            case Protocol.ADMIN_JOIN_REVIEW_REQ:
+                handleAdminJoinReview(data, reqId);
+                return true;
+            case Protocol.ADMIN_KICK_REQ:
+                handleAdminKick(data, reqId);
+                return true;
             default:
                 send(Protocol.error(Protocol.ERR_UNSUPPORTED,
                         "不支持的请求类型", reqId));
@@ -605,7 +614,10 @@ public class ClientHandler implements Runnable {
             member.nickname = nickname;
             member.signature = signature;
         } else {
-            member = roomService.join(nickname, signature, ip);
+            member = identityAccount != null
+                    ? roomService.joinWithId(identityAccount.id,
+                    nickname, signature, ip)
+                    : roomService.join(nickname, signature, ip);
         }
         if (identityAccount != null) {
             member.username = identityAccount.username;
@@ -688,8 +700,8 @@ public class ClientHandler implements Runnable {
         data.add("room", roomJson);
 
         JsonArray members = new JsonArray();
-        for (Member onlineMember : roomService.snapshot()) {
-            members.add(ChatServer.memberJson(onlineMember));
+        for (Member memberItem : server.memberSnapshot()) {
+            members.add(ChatServer.memberJson(memberItem));
         }
         data.add("members", members);
 
@@ -1126,6 +1138,111 @@ public class ClientHandler implements Runnable {
         if (!result.success) {
             send(Protocol.error(result.errorCode, result.message, reqId));
         }
+    }
+
+    private void handleAdminJoinRequests(String reqId) {
+        if (!adminAllowed(reqId)) {
+            return;
+        }
+        IdentityService service = server.getIdentityService();
+        if (service == null) {
+            send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                    "身份服务未初始化", reqId));
+            return;
+        }
+        try {
+            JsonArray array = new JsonArray();
+            for (IdentityAccount account : service.pending(200)) {
+                JsonObject item = new JsonObject();
+                item.addProperty("identityId", account.id);
+                item.addProperty("username", account.username);
+                item.addProperty("nickname", account.nickname);
+                item.addProperty("admin", account.admin);
+                item.addProperty("requestedAt", account.createdAt);
+                array.add(item);
+            }
+            JsonObject data = new JsonObject();
+            data.add("requests", array);
+            send(Protocol.frame(
+                    Protocol.ADMIN_JOIN_REQUESTS_RES, reqId, data));
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                    "读取入群申请失败", reqId));
+        }
+    }
+
+    private void handleAdminJoinReview(JsonObject data, String reqId) {
+        if (!adminAllowed(reqId)) {
+            return;
+        }
+        String identityId = optString(data, "identityId", "");
+        boolean approve = data.has("approve")
+                && data.get("approve").getAsBoolean();
+        if (identityId.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "缺少 identityId", reqId));
+            return;
+        }
+        IdentityService service = server.getIdentityService();
+        if (service == null) {
+            send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                    "身份服务未初始化", reqId));
+            return;
+        }
+        try {
+            IdentityAccount account = approve
+                    ? service.approve(identityId, member.nickname)
+                    : service.reject(identityId, member.nickname);
+            if (approve && account != null) {
+                server.notifyIdentityApproved(account);
+            }
+            JsonObject response = new JsonObject();
+            response.addProperty("success", true);
+            response.addProperty("message", approve ? "已通过" : "已拒绝");
+            send(Protocol.frame(
+                    Protocol.ADMIN_JOIN_REVIEW_RES, reqId, response));
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                    e.getMessage() == null ? "审核失败" : e.getMessage(),
+                    reqId));
+        }
+    }
+
+    private void handleAdminKick(JsonObject data, String reqId) {
+        if (!adminAllowed(reqId)) {
+            return;
+        }
+        String identityId = optString(data, "identityId", "");
+        if (identityId.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "缺少 identityId", reqId));
+            return;
+        }
+        try {
+            IdentityAccount account = server.kickIdentity(
+                    identityId, member.nickname);
+            if (account == null) {
+                send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                        "用户不存在", reqId));
+                return;
+            }
+            JsonObject response = new JsonObject();
+            response.addProperty("success", true);
+            response.addProperty("message", "已移出群聊");
+            send(Protocol.frame(Protocol.ADMIN_KICK_RES, reqId, response));
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                    "移除用户失败", reqId));
+        }
+    }
+
+    private boolean adminAllowed(String reqId) {
+        if (!config.adminEnabled || member == null || !member.admin) {
+            send(Protocol.error(Protocol.ERR_ADMIN_FORBIDDEN,
+                    "当前不是管理员", reqId));
+            return false;
+        }
+        return true;
     }
 
     private void handleRecallRequest(JsonObject data, String reqId) {

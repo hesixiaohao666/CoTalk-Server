@@ -21,6 +21,7 @@ import java.net.Socket;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -530,12 +531,45 @@ public class ChatServer implements AiReplySink {
         events.onMembersChanged(roomService.snapshot());
     }
 
+    public List<Member> memberSnapshot() {
+        List<Member> members = new ArrayList<>(roomService.snapshot());
+        IdentityService service = identityService;
+        if (service != null) {
+            try {
+                java.util.Set<String> ids = new java.util.HashSet<>();
+                for (Member member : members) {
+                    ids.add(member.id);
+                }
+                for (model.IdentityAccount account :
+                        service.approved(100000)) {
+                    if (ids.contains(account.id)) {
+                        continue;
+                    }
+                    Member offline = new Member(account.id,
+                            account.nickname, "", 0, false, "",
+                            account.lastSeenAt);
+                    offline.username = account.username;
+                    offline.admin = account.admin;
+                    offline.online = false;
+                    members.add(offline);
+                }
+            } catch (Exception e) {
+                events.onLog("读取离线成员失败：" + e.getMessage());
+            }
+        }
+        members.sort(java.util.Comparator
+                .comparing((Member member) -> !member.online)
+                .thenComparingLong(member -> member.connectedAt)
+                .thenComparing(member -> member.id));
+        return members;
+    }
+
     public void broadcastMemberList() {
         if (!running) {
             return;
         }
         JsonArray members = new JsonArray();
-        for (Member member : roomService.snapshot()) {
+        for (Member member : memberSnapshot()) {
             members.add(memberJson(member));
         }
         JsonObject data = new JsonObject();
@@ -759,6 +793,7 @@ public class ChatServer implements AiReplySink {
         json.addProperty("nickname", member.nickname);
         json.addProperty("username",
                 member.username == null ? "" : member.username);
+        json.addProperty("online", member.online);
         json.addProperty("signature",
                 member.signature == null ? "" : member.signature);
         json.addProperty("avatarVersion", member.avatarVersion);
