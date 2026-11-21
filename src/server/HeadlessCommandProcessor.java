@@ -105,9 +105,9 @@ public final class HeadlessCommandProcessor {
             log("CoTalk 终端命令");
             log("  help server   服务运行、成员与广播");
             log("  help config   配置查询、修改与保存");
-            log("  help aipro    AI Pro 管理");
-        log("  help identity 群聊身份与入群审核");
-            log("  help ai       AI 状态");
+            log("  help ai       AI 状态、数据与高级配置");
+            log("  help aipro    兼容别名，等价于 help ai");
+            log("  help identity 群聊身份与入群审核");
             log("  help danger   危险操作");
             log("  help all      显示全部命令");
             log("常用：status | members | broadcast <text> | recall <seq> | stop");
@@ -121,8 +121,6 @@ public final class HeadlessCommandProcessor {
             helpAipro();
             log("");
             helpIdentity();
-            log("");
-            helpAi();
             log("");
             helpDanger();
             return;
@@ -178,23 +176,27 @@ public final class HeadlessCommandProcessor {
     }
 
     private void helpAipro() {
-        log("AI Pro 命令：");
-        log("  aipro stats");
-        log("  aipro memories [deep|shallow|cache|all] [limit]");
-        log("  aipro memory search <text>");
-        log("  aipro memory archive|restore <id>");
-        log("  aipro memory delete <id>");
-        log("  aipro emojis [limit]");
-        log("  aipro emoji approve|reject <id>");
-        log("  aipro clear cache|all");
-        log("  aipro export <path>");
-        log("  aipro import <path>");
-        log("  aipro todos");
-        log("  aipro todo done|cancel <id>");
-        log("  aipro todo defer <id> <timestamp>");
-        log("  aipro emotion [reset]");
-        log("  aipro search status|reset");
+        log("AI 命令：");
+        log("  ai status                     查看 AI 状态");
+        log("  ai stats                      查看 AI 数据统计");
+        log("  ai memories [deep|shallow|cache|all] [limit]");
+        log("  ai memory search <text>");
+        log("  ai memory archive|restore <id>");
+        log("  ai memory delete <id>");
+        log("  ai emojis [limit]");
+        log("  ai emoji approve|reject <id>");
+        log("  ai clear cache|all");
+        log("  ai export <path>");
+        log("  ai import <path>");
+        log("  ai todos");
+        log("  ai todo done|cancel <id>");
+        log("  ai todo defer <id> <timestamp>");
+        log("  ai emotion [reset]");
+        log("  ai search status|reset");
+        log("  config list ai                查看基础 AI 配置");
+        log("  config list aipro             查看 AI 高级配置");
         log("删除记忆和清空记忆需要再次输入 yes 确认。");
+        log("aipro 为兼容别名，等价于 ai。");
     }
 
     private void helpIdentity() {
@@ -207,16 +209,13 @@ public final class HeadlessCommandProcessor {
     }
 
     private void helpAi() {
-        log("AI 命令：");
-        log("  ai status                     查看 AI 状态");
-        log("  config list ai                查看基础 AI 配置");
-        log("  config list aipro             查看 AI Pro 配置");
+        helpAipro();
     }
 
     private void helpDanger() {
         log("危险操作（需要再次输入 yes 确认）：");
-        log("  aipro clear cache|all         清空缓存或全部 AI Pro 记忆");
-        log("  aipro memory delete <id>      删除指定 AI Pro 记忆");
+        log("  ai clear cache|all            清空缓存或全部 AI 记忆");
+        log("  ai memory delete <id>         删除指定 AI 记忆");
     }
 
     private void status() {
@@ -297,7 +296,11 @@ public final class HeadlessCommandProcessor {
             log("AI：" + runtime.getAiStatus());
             return;
         }
-        log("未知 AI 命令：" + value + "，输入 help ai 查看命令");
+        if ("help".equalsIgnoreCase(value)) {
+            helpAipro();
+            return;
+        }
+        aiManager(value);
     }
 
     private void config(String rest) {
@@ -514,6 +517,11 @@ public final class HeadlessCommandProcessor {
     }
 
     private void aipro(String rest) {
+        log("提示：AI 管理已统一到 ai 命令，aipro 保留为兼容别名。");
+        aiManager(rest);
+    }
+
+    private void aiManager(String rest) {
         String value = rest == null ? "" : rest.trim();
         if ("help".equalsIgnoreCase(value)) {
             helpAipro();
@@ -569,7 +577,7 @@ public final class HeadlessCommandProcessor {
                         "stats", "memories", "memory", "emojis", "emoji",
                         "clear", "export", "import", "todos", "todo",
                         "emotion", "search");
-                log("未知 AI Pro 命令：" + sub
+                log("未知 AI 命令：" + sub
                         + (suggestion == null ? "" : "，是否想输入 aipro "
                         + suggestion));
         }
@@ -712,7 +720,7 @@ public final class HeadlessCommandProcessor {
             return;
         }
         schedule(() -> clearMemories(admin, normalized),
-                "清空 AI Pro " + normalized + " 记忆");
+                "清空 AI " + normalized + " 记忆");
     }
 
     private void clearMemories(AiProAdminService admin, String target)
@@ -723,7 +731,7 @@ public final class HeadlessCommandProcessor {
         } else {
             count = admin.clearLayer(MemoryLayer.CACHE, OPERATOR);
         }
-        log("已清空 AI Pro 记忆 " + count + " 条");
+        log("已清空 AI 记忆 " + count + " 条");
     }
 
     private void export(AiProAdminService admin, String value) {
@@ -818,10 +826,10 @@ public final class HeadlessCommandProcessor {
         try {
             if ("reset".equalsIgnoreCase(value)) {
                 admin.resetEmotion(OPERATOR);
-                log("AI Pro 情绪已重置");
+                log("AI 情绪已重置");
             } else if (value.isEmpty()
                     || "status".equalsIgnoreCase(value)) {
-                log("AI Pro 情绪：" + admin.emotionText());
+                log("AI 情绪：" + admin.emotionText());
             } else {
                 log("用法：aipro emotion [reset]");
             }
@@ -850,7 +858,7 @@ public final class HeadlessCommandProcessor {
         }
         if ("reset".equals(action)) {
             if (admin == null) {
-                log("AI Pro 管理服务未初始化");
+                log("AI 数据服务未初始化");
                 return;
             }
             try {
@@ -889,7 +897,7 @@ public final class HeadlessCommandProcessor {
     private AiProAdminService admin() {
         AiProAdminService admin = runtime.getAiProAdminService();
         if (admin == null) {
-            log("AI Pro 管理服务未初始化");
+            log("AI 数据服务未初始化");
         }
         return admin;
     }

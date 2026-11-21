@@ -238,7 +238,7 @@ public class MemoryConsolidator {
             long cleanupAt = now - 30L * 86_400_000L;
             store.deletePhysicalBefore(cleanupAt);
         } catch (Exception e) {
-            sink.reportError("AI Pro 物理清理失败：" + e.getMessage());
+            sink.reportError("AI 物理清理失败：" + e.getMessage());
         }
     }
 

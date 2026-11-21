@@ -127,7 +127,7 @@ public class MemoryPipeline {
             }
             indexManager.rebuildQuietly();
         } catch (Exception e) {
-            sink.reportError("AI Pro 记忆管线初始化失败："
+            sink.reportError("AI 记忆管线初始化失败："
                     + e.getMessage());
         }
     }
@@ -335,11 +335,11 @@ public class MemoryPipeline {
                         store.getMeta("round_count", "0"), 0);
                 consolidator.consolidate(roundNumber);
             } catch (Exception e) {
-                sink.reportError("AI Pro 记忆巩固失败：" + e.getMessage());
+                sink.reportError("AI 记忆巩固失败：" + e.getMessage());
             }
             indexManager.rebuildQuietly();
         } catch (Exception e) {
-            sink.reportError("AI Pro 记忆轮次失败：" + e.getMessage());
+            sink.reportError("AI 记忆轮次失败：" + e.getMessage());
             try {
                 store.insertRound(startedAt, System.currentTimeMillis(),
                         type, fromSeq, toSeq, pendingMessages.get(),
@@ -500,7 +500,7 @@ public class MemoryPipeline {
                     primary.layer, primary.layer, null, null,
                     "system", "similarity-merge", now);
         } catch (Exception e) {
-            sink.reportError("AI Pro 合并记忆失败：" + e.getMessage());
+            sink.reportError("AI 合并记忆失败：" + e.getMessage());
         }
     }
 

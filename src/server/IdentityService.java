@@ -45,6 +45,9 @@ public class IdentityService {
                                    boolean adminVerified) throws Exception {
         String normalized = normalizeUsername(username);
         if (!usernameValid(normalized)) {
+            if (ai.AiResponder.AI_USERNAME.equalsIgnoreCase(normalized)) {
+                return RegisterResult.failure("该用户名由系统保留");
+            }
             return RegisterResult.failure("用户名需以字母开头，仅包含字母和数字");
         }
         if (!passwordValid(password)) {
@@ -233,7 +236,9 @@ public class IdentityService {
         String value = normalizeUsername(username);
         return value.length() >= config.adminIdentityUsernameMin
                 && value.length() <= config.adminIdentityUsernameMax
-                && USERNAME.matcher(value).matches();
+                && USERNAME.matcher(value).matches()
+                // AI 的稳定用户名保留给 AI 成员，避免自我识别冲突。
+                && !ai.AiResponder.AI_USERNAME.equalsIgnoreCase(value);
     }
 
     public boolean passwordValid(String password) {

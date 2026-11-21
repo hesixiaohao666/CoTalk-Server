@@ -85,7 +85,7 @@ public class AiProResponder extends DeepSeekAiResponder {
                         new AiTodoStore(database), config.aiPro, sink);
                 todos.start();
             } catch (Exception e) {
-                sink.reportError("AI Pro 待办初始化失败：" + e.getMessage());
+                sink.reportError("AI 待办初始化失败：" + e.getMessage());
             }
             this.todoService = todos;
             AiEmojiService emojis = null;
@@ -96,7 +96,7 @@ public class AiProResponder extends DeepSeekAiResponder {
                     emojis = new AiEmojiService(
                             emojiStore, attachmentService, config.aiPro, sink);
                 } catch (Exception e) {
-                    sink.reportError("AI Pro 表情库初始化失败：" + e.getMessage());
+                    sink.reportError("AI 表情库初始化失败：" + e.getMessage());
                 }
             }
             this.emojiService = emojis;
@@ -126,7 +126,7 @@ public class AiProResponder extends DeepSeekAiResponder {
         try {
             memory = coreMemoryStore.load();
         } catch (Exception e) {
-            sink.reportError("AI Pro 读取核心记忆失败：" + e.getMessage());
+            sink.reportError("AI 读取核心记忆失败：" + e.getMessage());
             memory = AiProPrompts.defaultCore(
                     config.aiName,
                     config.aiPromptCustom,
@@ -226,7 +226,7 @@ public class AiProResponder extends DeepSeekAiResponder {
         try {
             return messageService.recent(config.aiMaxContext);
         } catch (Exception e) {
-            sink.reportError("AI Pro 读取上下文失败：" + e.getMessage());
+            sink.reportError("AI 读取上下文失败：" + e.getMessage());
             return Collections.emptyList();
         }
     }
@@ -251,7 +251,7 @@ public class AiProResponder extends DeepSeekAiResponder {
                 try {
                     sink.appendAiMessage(search.notice);
                 } catch (Exception e) {
-                    sink.reportError("AI Pro 搜索额度提示发送失败："
+                    sink.reportError("AI 搜索额度提示发送失败："
                             + e.getMessage());
                 }
             }
@@ -278,7 +278,7 @@ public class AiProResponder extends DeepSeekAiResponder {
         try {
             memoryStore.recordHits(ids, now, config.aiPro);
         } catch (Exception e) {
-            sink.reportError("AI Pro 更新记忆命中失败：" + e.getMessage());
+            sink.reportError("AI 更新记忆命中失败：" + e.getMessage());
         }
         String injection = MemoryRetriever.formatInjection(retrieved);
         if (!injection.isEmpty()) {
@@ -304,7 +304,7 @@ public class AiProResponder extends DeepSeekAiResponder {
             for (int i = start; i < context.size(); i++) {
                 Message message = context.get(i);
                 if (message == null || "system".equals(message.type)
-                        || AI_USER_ID.equals(message.senderId)) {
+                        || AiDisplayName.isAi(message)) {
                     continue;
                 }
                 String content = message.content == null
@@ -343,7 +343,9 @@ public class AiProResponder extends DeepSeekAiResponder {
                 } else if ("voice".equals(message.type)) {
                     content = "[语音]";
                 }
-                builder.append(sender).append("：").append(content).append('\n');
+                builder.append(sender).append("：")
+                        .append(AiDisplayName.replyTag(message))
+                        .append(content).append('\n');
             }
         }
         return builder.toString();

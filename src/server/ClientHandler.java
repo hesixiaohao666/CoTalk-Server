@@ -833,7 +833,7 @@ public class ClientHandler implements Runnable {
         serverInfo.addProperty("versionName", ServerVersion.VERSION_NAME);
         serverInfo.addProperty("versionCode", ServerVersion.VERSION_CODE);
         serverInfo.addProperty("aiEnabled", server.isAiActive());
-        serverInfo.addProperty("aiProEnabled", config.aiProEnabled);
+        serverInfo.addProperty("aiUsername", ai.AiResponder.AI_USERNAME);
         serverInfo.addProperty("aiName", config.aiName);
         serverInfo.addProperty("adminEnabled", config.adminEnabled);
         serverInfo.addProperty("pushEnabled", config.pushEnabled);

@@ -60,6 +60,7 @@ public final class ServerConfigStore {
         boolean newKeysMissing = false;
         boolean configUpgraded = false;
         boolean configVersionOutdated = false;
+        boolean legacyProSwitch = false;
         if (!created) {
             Properties loaded = new Properties();
             try (BufferedReader reader = Files.newBufferedReader(
@@ -69,6 +70,15 @@ public final class ServerConfigStore {
                 throw new IOException("配置文件格式错误：" + e.getMessage(), e);
             }
             merged.putAll(loaded);
+
+            // v0.4 单引擎：旧 AI Pro 开关只在 ai.enabled 缺失时映射为 AI 总开关。
+            legacyProSwitch = loaded.containsKey("ai.pro.enabled");
+            if (!loaded.containsKey("ai.enabled")
+                    && Boolean.parseBoolean(
+                    loaded.getProperty("ai.pro.enabled", "false"))) {
+                merged.setProperty("ai.enabled", "true");
+            }
+            merged.remove("ai.pro.enabled");
 
             String existingCustom = loaded.getProperty(
                     "ai.prompt.custom", "").trim();
@@ -149,7 +159,8 @@ public final class ServerConfigStore {
         validate(config);
 
         if (created || keyGenerated || promptMigrated
-                || newKeysMissing || configUpgraded || configVersionOutdated) {
+                || newKeysMissing || configUpgraded || configVersionOutdated
+                || legacyProSwitch) {
             saveProperties(merged, path);
         }
         return new LoadResult(

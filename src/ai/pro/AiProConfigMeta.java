@@ -38,21 +38,19 @@ public final class AiProConfigMeta {
 
     static {
         // 基础与轮次
-        bool("enabled", "启用 AI Pro", GROUP_BASIC,
-                "由 AI 功能页的 AI群友Pro 开关控制", false);
-        text("model", "Pro 模型", GROUP_BASIC,
+        text("model", "AI 模型（高级）", GROUP_BASIC,
                 "留空表示沿用 AI 功能页的模型");
-        integer("maxTokens", "Pro maxTokens", GROUP_BASIC, 0,
+        integer("maxTokens", "AI maxTokens（高级）", GROUP_BASIC, 0,
                 Integer.MAX_VALUE, "",
                 "0 表示使用基础模型默认值");
-        integer("timeoutMs", "Pro 请求超时", GROUP_BASIC, 0,
+        integer("timeoutMs", "AI 请求超时（高级）", GROUP_BASIC, 0,
                 Integer.MAX_VALUE, "毫秒",
                 "0 表示使用基础请求超时");
-        integer("prompt.contextMessages", "Pro 上下文条数", GROUP_BASIC,
+        integer("prompt.contextMessages", "AI 上下文条数", GROUP_BASIC,
                 1, 200, "条", "");
-        integer("prompt.maxChars", "Pro 提示词上限", GROUP_BASIC,
+        integer("prompt.maxChars", "AI 提示词上限", GROUP_BASIC,
                 500, 100000, "字符", "");
-        integer("prompt.maxMemoryChars", "Pro 记忆预算", GROUP_BASIC,
+        integer("prompt.maxMemoryChars", "AI 记忆预算", GROUP_BASIC,
                 0, 100000, "字符", "");
         bool("trigger.systemMessages", "系统消息可触发回复", GROUP_BASIC,
                 "系统消息按概率触发 AI 主动回复", true);
@@ -61,7 +59,7 @@ public final class AiProConfigMeta {
         list("owner.names", "主人昵称", GROUP_BASIC,
                 "逗号分隔，可留空");
         bool("migrate.importHistory", "迁移历史消息", GROUP_BASIC,
-                "首次启用 Pro 时导入历史消息", true);
+                "首次启用 AI 时导入历史消息", true);
         bool("migrate.backup", "迁移前备份", GROUP_BASIC,
                 "迁移前备份旧记忆数据", true);
         integer("round.intervalMs", "轮次间隔", GROUP_BASIC, 1000,

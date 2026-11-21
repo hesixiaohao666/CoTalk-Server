@@ -91,7 +91,9 @@ public final class AiProPrompts {
         if (emotionSection != null && !emotionSection.trim().isEmpty()) {
             builder.append("\n\n").append(emotionSection.trim());
         }
-        builder.append("\n\n【回复规则】\n")
+        builder.append("\n\n【上下文规则】\n")
+                .append(ai.AiPrompts.CONTEXT_RULES).append('\n')
+                .append("\n【回复规则】\n")
                 .append("- 被 @ 或拍一拍时必须尝试回复至少一条。\n")
                 .append("- 关键词/随机/系统/图片触发时可自主判断；没有必要则输出 ")
                 .append(ai.AiJsonContract.NO_SEND_EXAMPLE).append("。\n")

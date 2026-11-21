@@ -12,7 +12,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -60,9 +59,6 @@ public class ServerSettingsDialog extends JDialog {
     private final JButton copyAdminKeyButton = new JButton("复制");
     private final JLabel adminKeyStatusLabel = new JLabel();
 
-    private final JCheckBox aiProEnabledCheck =
-            new JCheckBox("AI群友Pro（实验性功能）");
-    private final List<JComponent> classicOnlyAiRows = new ArrayList<>();
     private final ai.pro.AiProAdvancedPanel aiProAdvancedPanel;
     private final JCheckBox aiEnabledCheck = new JCheckBox("启用 AI 群友");
     private final JCheckBox aiVisionCheck = new JCheckBox("允许 AI 识图");
@@ -155,11 +151,6 @@ public class ServerSettingsDialog extends JDialog {
         tabs.addTab("通用", buildGeneralPanel());
         tabs.addTab("管理员", buildAdminPanel());
         tabs.addTab("AI功能", buildAiPanel());
-        if (aiProAdminService != null) {
-            tabs.addTab("AI Pro管理",
-                    new ai.pro.AiProSettingsPanel(
-                            this, aiProAdminService, aiProAdvancedPanel));
-        }
         tabs.addTab("关于", buildAboutPanel());
         content.add(tabs, BorderLayout.CENTER);
 
@@ -239,8 +230,16 @@ public class ServerSettingsDialog extends JDialog {
         JPanel form = formPanel();
         int row = 0;
 
-        addRow(form, row++, "AI群友Pro", aiProEnabledCheck,
-                "实验性功能；关闭时回退经典 AI");
+        JButton dataManager = new JButton("打开 AI 数据管理");
+        dataManager.addActionListener(e -> openAiDataManager());
+        dataManager.setEnabled(aiProAdminService != null);
+        addRow(form, row++, "AI 数据管理", dataManager,
+                "记忆、情绪、表情、待办、核心提示词与导入导出");
+
+        JButton advanced = new JButton("打开高级选项");
+        advanced.addActionListener(e -> openAiAdvanced());
+        addRow(form, row++, "AI 高级选项", advanced,
+                "轮次、记忆、情绪、表情、待办、搜索等参数");
 
         addRow(form, row++, "AI 开关", aiEnabledCheck,
                 "关闭或未填写 API Key 时不会出现 AI 成员");
@@ -283,16 +282,16 @@ public class ServerSettingsDialog extends JDialog {
         JScrollPane forcedPromptScroll = new JScrollPane(aiForcedPromptArea);
         forcedPromptScroll.setPreferredSize(new Dimension(420, 90));
         addRow(form, row++, "强制提示词", forcedPromptScroll,
-                "由程序固定，不可修改", classicOnlyAiRows);
+                "由程序固定，不可修改");
 
         aiPromptArea.setLineWrap(true);
         aiPromptArea.setWrapStyleWord(true);
         JScrollPane promptScroll = new JScrollPane(aiPromptArea);
         promptScroll.setPreferredSize(new Dimension(420, 90));
         addRow(form, row++, "自定义提示词", promptScroll,
-                "用于经典 AI 的人设和表达风格", classicOnlyAiRows);
+                "用于 AI 的人设和表达风格");
         addRow(form, row++, "上下文条数", aiMaxContextField,
-                "经典 AI 使用", classicOnlyAiRows);
+                "基础上下文条数");
 
         addRow(form, row++, "AI 识图", aiVisionCheck,
                 "关闭后只保留图片/表情的文字描述");
@@ -309,8 +308,8 @@ public class ServerSettingsDialog extends JDialog {
                         + "峰时由程序按服务器本地时区判断。"
                         + "修改 AI 配置后需要重启服务。");
         addNote(form, row,
-                "AI Pro 的轮次、记忆、情绪、表情、待办、搜索等全部参数"
-                        + "位于“AI Pro管理 → 高级选项”。");
+                "轮次、记忆、情绪、表情、待办、搜索等参数"
+                        + "位于“AI 数据管理 → 高级选项”。");
 
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(null);
@@ -318,6 +317,31 @@ public class ServerSettingsDialog extends JDialog {
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
+    }
+
+    private void openAiDataManager() {
+        if (aiProAdminService == null) {
+            JOptionPane.showMessageDialog(this,
+                    "AI 数据服务尚未初始化，请先启动服务。",
+                    "AI 数据管理", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        JDialog dialog = new JDialog(this, "AI 数据管理", true);
+        dialog.setContentPane(new ai.pro.AiProSettingsPanel(
+                dialog, aiProAdminService));
+        dialog.setSize(900, 640);
+        dialog.setMinimumSize(new Dimension(760, 520));
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void openAiAdvanced() {
+        JDialog dialog = new JDialog(this, "AI 高级选项", true);
+        dialog.setContentPane(aiProAdvancedPanel);
+        dialog.setSize(900, 640);
+        dialog.setMinimumSize(new Dimension(760, 520));
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 
     private JPanel buildAdminPanel() {
@@ -575,8 +599,6 @@ public class ServerSettingsDialog extends JDialog {
         adminKeyField.setText("");
         updateAdminKeyStatus(false);
 
-        aiProEnabledCheck.setSelected(original.aiProEnabled);
-        updateAiModeVisibility();
         aiEnabledCheck.setSelected(original.aiEnabled);
         aiVisionCheck.setSelected(original.aiVision);
         aiSystemMessagesCheck.setSelected(original.aiSystemMessages);
@@ -608,7 +630,6 @@ public class ServerSettingsDialog extends JDialog {
     }
 
     private void bindActions() {
-        aiProEnabledCheck.addActionListener(e -> updateAiModeVisibility());
         showAuthKey.addActionListener(e -> setVisible(authKeyField, showAuthKey));
         showApiKey.addActionListener(e -> setVisible(apiKeyField, showApiKey));
         generateKeyButton.addActionListener(e -> {
@@ -632,15 +653,6 @@ public class ServerSettingsDialog extends JDialog {
         });
         copyAdminKeyButton.addActionListener(e -> copyKey(
                 adminKeyField, copyAdminKeyButton, "管理员密钥"));
-    }
-
-    private void updateAiModeVisibility() {
-        boolean pro = aiProEnabledCheck.isSelected();
-        for (JComponent component : classicOnlyAiRows) {
-            component.setVisible(!pro);
-        }
-        revalidate();
-        repaint();
     }
 
     private void copyKey(JPasswordField field,
@@ -802,8 +814,6 @@ public class ServerSettingsDialog extends JDialog {
                 String.valueOf(adminIterations));
         properties.setProperty("admin.verifier", adminVerifier);
 
-        properties.setProperty("ai.pro.enabled",
-                String.valueOf(aiProEnabledCheck.isSelected()));
         aiProAdvancedPanel.applyTo(properties);
 
         properties.setProperty("ai.enabled",

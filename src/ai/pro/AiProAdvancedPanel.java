@@ -23,7 +23,7 @@ public class AiProAdvancedPanel extends JPanel {
         setBorder(new EmptyBorder(8, 8, 8, 8));
 
         JTextArea hint = new JTextArea(
-                "以下为 AI Pro 高级参数。如果您不清楚这些参数的作用，"
+                "以下为 AI 高级参数。如果您不清楚这些参数的作用，"
                         + "请不要随意修改。保存后需重启服务才会生效。");
         hint.setEditable(false);
         hint.setLineWrap(true);
@@ -173,7 +173,7 @@ public class AiProAdvancedPanel extends JPanel {
             new AiProConfig(properties).validate();
         } catch (IllegalArgumentException e) {
             focusByMessage(e.getMessage());
-            throw new IllegalArgumentException("AI Pro 高级选项无效："
+            throw new IllegalArgumentException("AI 高级选项无效："
                     + e.getMessage());
         }
     }

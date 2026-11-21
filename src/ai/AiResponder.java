@@ -11,6 +11,7 @@ import java.util.List;
 public interface AiResponder {
 
     String AI_USER_ID = "ai-90001";
+    String AI_USERNAME = "AI";
 
     /**
      * AI 是否真正可用（开关开启且已配置 API Key）。

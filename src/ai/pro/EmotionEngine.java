@@ -43,7 +43,7 @@ public class EmotionEngine {
             decayTo(System.currentTimeMillis(), true);
             store.save(state);
         } catch (Exception e) {
-            sink.reportError("AI Pro 加载情绪失败：" + e.getMessage());
+            sink.reportError("AI 加载情绪失败：" + e.getMessage());
         }
     }
 
@@ -197,7 +197,7 @@ public class EmotionEngine {
         try {
             store.save(state);
         } catch (Exception e) {
-            sink.reportError("AI Pro 保存情绪失败：" + e.getMessage());
+            sink.reportError("AI 保存情绪失败：" + e.getMessage());
         }
     }
 

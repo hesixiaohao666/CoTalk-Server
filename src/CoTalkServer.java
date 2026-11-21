@@ -498,7 +498,7 @@ public class CoTalkServer extends JFrame {
             roomLabel.setText(runtime.getRoom().name);
             storageLabel.setText("SQLite 已连接");
             String aiStatus = formatAiStatus(runtime.getAiStatus());
-            if (config.aiProEnabled && runtime.isRunning()) {
+            if (runtime.isRunning() && runtime.isAiActive()) {
                 aiStatus += "\n情绪：" + runtime.getAiProEmotionStatus();
             }
             aiValue.setText(aiStatus);

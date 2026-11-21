@@ -75,7 +75,7 @@ public final class ServerRuntime {
                 aiProAdminService = new ai.pro.AiProAdminService(
                         database, config, events::onLog);
             } catch (Exception e) {
-                events.onLog("AI Pro 管理服务初始化失败：" + e.getMessage());
+                events.onLog("AI 数据服务初始化失败：" + e.getMessage());
             }
             RoomStore roomStore = new RoomStore(database);
             room = roomStore.loadOrCreate(
@@ -125,7 +125,7 @@ public final class ServerRuntime {
                         Base64.getEncoder().encodeToString(file.bytes));
             };
             AiResponder responder;
-            if (config.aiProEnabled) {
+            if (AiResponderFactory.isConfigured(config)) {
                 try {
                     CoreMemoryStore coreMemoryStore =
                             new CoreMemoryStore(database);
@@ -133,20 +133,20 @@ public final class ServerRuntime {
                             config.aiName,
                             config.aiPromptCustom,
                             config.aiPro.ownerNames());
-                    responder = AiResponderFactory.createPro(
+                    responder = AiResponderFactory.create(
                             config, chatServer, imageResolver,
                             coreMemoryStore, database, messageService,
                             attachmentService);
-                    events.onLog("AI群友Pro 已启用（实验性功能）");
+                    events.onLog("AI 群友已启用");
                 } catch (Exception e) {
-                    events.onLog("AI Pro 初始化失败，回退经典 AI："
+                    // 单引擎：初始化失败时不回退旧引擎，直接保持 AI 不可用。
+                    events.onLog("AI 初始化失败，AI 功能暂不可用："
                             + e.getMessage());
-                    responder = AiResponderFactory.create(
-                            config, chatServer, imageResolver);
+                    responder = new ai.NoopAiResponder();
+                    roomService.setAiMember(null);
                 }
             } else {
-                responder = AiResponderFactory.create(
-                        config, chatServer, imageResolver);
+                responder = new ai.NoopAiResponder();
             }
             aiResponder = responder;
             if (aiProAdminService != null
@@ -369,6 +369,10 @@ public final class ServerRuntime {
                 : chatServer.kickIdentity(identityId, operator);
     }
 
+    public boolean isAiActive() {
+        return aiResponder != null && aiResponder.isActive();
+    }
+
     public String getAiProEmotionStatus() {
         if (aiResponder instanceof ai.pro.AiProResponder) {
             return ((ai.pro.AiProResponder) aiResponder)
@@ -386,6 +390,9 @@ public final class ServerRuntime {
         }
         if (!isRunning()) {
             return "已启用（服务未运行）";
+        }
+        if (!isAiActive()) {
+            return "已开启但初始化失败";
         }
         return "已启用，模型 " + config.aiModel + "，成员 " + config.aiName;
     }

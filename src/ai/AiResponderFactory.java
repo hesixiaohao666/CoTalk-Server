@@ -23,35 +23,21 @@ public final class AiResponderFactory {
                 && !config.aiBaseUrl.trim().isEmpty();
     }
 
-    public static AiResponder create(ServerConfig config, AiReplySink sink) {
-        return create(config, sink, null);
-    }
-
+    /**
+     * 单 AI 引擎。调用方需先完成 CoreMemoryStore.initialize。
+     */
     public static AiResponder create(ServerConfig config,
                                      AiReplySink sink,
-                                     AiImageResolver imageResolver) {
-        if (!isConfigured(config) || sink == null) {
-            return new NoopAiResponder();
-        }
-        return new DeepSeekAiResponder(
-                config, createDeepSeekClient(config), sink, imageResolver);
-    }
-
-    /**
-     * AI Pro 引擎。调用方需先完成 CoreMemoryStore.initialize。
-     */
-    public static AiResponder createPro(ServerConfig config,
-                                        AiReplySink sink,
-                                        AiImageResolver imageResolver,
-                                        CoreMemoryStore coreMemoryStore,
-                                        store.Database database,
-                                        server.MessageService messageService,
-                                        server.AttachmentService attachmentService) {
+                                     AiImageResolver imageResolver,
+                                     CoreMemoryStore coreMemoryStore,
+                                     store.Database database,
+                                     server.MessageService messageService,
+                                     server.AttachmentService attachmentService) {
         if (!isConfigured(config) || sink == null) {
             return new NoopAiResponder();
         }
         if (coreMemoryStore == null) {
-            throw new IllegalArgumentException("AI Pro 核心记忆未初始化");
+            throw new IllegalArgumentException("AI 核心记忆未初始化");
         }
         return new AiProResponder(
                 config, createDeepSeekClient(config), sink,

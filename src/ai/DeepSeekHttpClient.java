@@ -171,31 +171,26 @@ public class DeepSeekHttpClient implements DeepSeekClient {
     }
 
     private String effectiveModel() {
-        if (config.aiProEnabled) {
-            String model = config.aiPro.model();
-            if (model != null && !model.trim().isEmpty()) {
-                return model.trim();
-            }
+        // 单引擎：高级参数优先，留空时沿用 AI 功能页的模型。
+        String model = config.aiPro.model();
+        if (model != null && !model.trim().isEmpty()) {
+            return model.trim();
         }
         return config.aiModel;
     }
 
     private int effectiveMaxTokens() {
-        if (config.aiProEnabled) {
-            int tokens = config.aiPro.getInt("ai.pro.maxTokens");
-            if (tokens > 0) {
-                return tokens;
-            }
+        int tokens = config.aiPro.getInt("ai.pro.maxTokens");
+        if (tokens > 0) {
+            return tokens;
         }
         return config.aiMaxTokens;
     }
 
     private int effectiveTimeoutMs() {
-        if (config.aiProEnabled) {
-            int timeout = config.aiPro.getInt("ai.pro.timeoutMs");
-            if (timeout > 0) {
-                return timeout;
-            }
+        int timeout = config.aiPro.getInt("ai.pro.timeoutMs");
+        if (timeout > 0) {
+            return timeout;
         }
         return config.aiTimeoutMs;
     }

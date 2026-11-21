@@ -26,7 +26,7 @@ public final class AiMemberService {
                 config.avatarMaxBytes,
                 false,
                 true);
-        return new Member(
+        Member member = new Member(
                 AiResponder.AI_USER_ID,
                 config.aiName,
                 "",
@@ -35,5 +35,7 @@ public final class AiMemberService {
                 "server-ai",
                 System.currentTimeMillis()
         );
+        member.username = AiResponder.AI_USERNAME;
+        return member;
     }
 }

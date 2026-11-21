@@ -369,7 +369,7 @@ public class AiProSettingsPanel extends JPanel {
     private void importMemories() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
-                "AI Pro 记忆 JSON", "json"));
+                "AI 记忆 JSON", "json"));
         if (chooser.showOpenDialog(owner) != JFileChooser.APPROVE_OPTION) {
             return;
         }

@@ -53,7 +53,6 @@ public class ServerConfig {
     public final int adminIdentityLoginRateLimit;
     public final int adminIdentityLoginWindowMs;
 
-    public final boolean aiProEnabled;
     public final AiProConfig aiPro;
 
     public final boolean aiEnabled;
@@ -145,7 +144,6 @@ public class ServerConfig {
                 properties, "admin.identity.loginWindowMs", 60000);
 
         aiPro = new AiProConfig(properties);
-        aiProEnabled = aiPro.enabled();
 
         aiEnabled = Boolean.parseBoolean(value(properties, "ai.enabled", "false"));
         aiApiKey = value(properties, "ai.apiKey", "");

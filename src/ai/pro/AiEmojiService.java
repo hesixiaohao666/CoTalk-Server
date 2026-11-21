@@ -63,7 +63,7 @@ public class AiEmojiService {
                     file.attachment.mime, message.fileName, "[]",
                     "user", message.senderId, approved);
         } catch (Exception e) {
-            sink.reportError("AI Pro 收集用户表情失败：" + e.getMessage());
+            sink.reportError("AI 收集用户表情失败：" + e.getMessage());
             return null;
         }
     }
@@ -92,7 +92,7 @@ public class AiEmojiService {
                 return new ArrayList<>(result.subList(0, max));
             }
         } catch (Exception e) {
-            sink.reportError("AI Pro 读取表情候选失败：" + e.getMessage());
+            sink.reportError("AI 读取表情候选失败：" + e.getMessage());
         }
         return result;
     }
@@ -149,7 +149,7 @@ public class AiEmojiService {
                     content == null ? emoji.name : content);
             return true;
         } catch (Exception e) {
-            sink.reportError("AI Pro 发送表情失败：" + e.getMessage());
+            sink.reportError("AI 发送表情失败：" + e.getMessage());
             return false;
         }
     }

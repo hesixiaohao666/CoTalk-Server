@@ -15,7 +15,6 @@ public final class AiProConfig {
     private static final Map<String, String> DEFAULTS = new LinkedHashMap<>();
 
     static {
-        put("ai.pro.enabled", "false");
         put("ai.pro.model", "");
         put("ai.pro.maxTokens", "0");
         put("ai.pro.timeoutMs", "0");
@@ -194,10 +193,6 @@ public final class AiProConfig {
             }
         }
         return missing;
-    }
-
-    public boolean enabled() {
-        return getBoolean("ai.pro.enabled");
     }
 
     public String model() {

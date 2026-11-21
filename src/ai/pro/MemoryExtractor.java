@@ -232,6 +232,9 @@ public final class MemoryExtractor {
                 + "不得把这两类内容写成 user_statement。\n"
                 + "系统事件和 AI 自身发言的可信度低于用户陈述，"
                 + "只抽取明确的事件性事实，不要据此编造用户偏好。\n"
+                + "成员以“昵称（@稳定用户名）”标识；记忆的 subject 与待办的 user"
+                + "必须填写 @ 后的稳定用户名，不要填昵称。"
+                + "同一稳定用户名重进群仍是同一人，不得当作新成员。\n"
                 + "最多输出 " + config.getInt("ai.pro.extract.maxPerRound")
                 + " 条；无法确定时省略。\n"
                 + "只有用户明确说“提醒我/记得提醒/别忘了”等且时间明确时才返回 todos；"
@@ -239,7 +242,7 @@ public final class MemoryExtractor {
                 + "输出 Schema："
                 + "{\"memories\":[{\"content\":\"短句记忆\","
                 + "\"category\":\"fact\",\"keywords\":[\"词\"],"
-                + "\"tags\":[\"标签\"],\"subject\":\"昵称或空\","
+                + "\"tags\":[\"标签\"],\"subject\":\"稳定用户名或空\","
                 + "\"source\":\"user_statement\",\"explicit\":0,"
                 + "\"task_relevance\":0.5,\"emotional\":0.5,"
                 + "\"rebuildable\":0,\"confidence\":0.8}],"
@@ -247,7 +250,7 @@ public final class MemoryExtractor {
                 + "\"arousal\":0.2,\"intensity\":0.2},"
                 + "\"todos\":[{\"content\":\"待办内容\","
                 + "\"remind_at\":1730000000000,"
-                + "\"timezone\":\"Asia/Shanghai\",\"user\":\"昵称\","
+                + "\"timezone\":\"Asia/Shanghai\",\"user\":\"稳定用户名\","
                 + "\"explicit\":1}],"
                 + "\"todo_actions\":[{\"action\":\"done\","
                 + "\"todo_id\":\"todo-xxxxxxxx\",\"defer_to\":0}]}";

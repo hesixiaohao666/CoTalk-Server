@@ -65,7 +65,7 @@ public class AiTodoService {
                 try {
                     createTodo(extracted, messages, now);
                 } catch (Exception e) {
-                    sink.reportError("AI Pro 创建待办失败：" + e.getMessage());
+                    sink.reportError("AI 创建待办失败：" + e.getMessage());
                 }
             }
         }
@@ -73,7 +73,7 @@ public class AiTodoService {
             try {
                 applyAction(action, now);
             } catch (Exception e) {
-                sink.reportError("AI Pro 更新待办失败：" + e.getMessage());
+                sink.reportError("AI 更新待办失败：" + e.getMessage());
             }
         }
     }
@@ -187,11 +187,11 @@ public class AiTodoService {
                                 todo.remindCount, retry, now,
                                 todo.status, now);
                     }
-                    sink.reportError("AI Pro 待办提醒失败：" + e.getMessage());
+                    sink.reportError("AI 待办提醒失败：" + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            sink.reportError("AI Pro 待办检查失败：" + e.getMessage());
+            sink.reportError("AI 待办检查失败：" + e.getMessage());
         }
     }
 

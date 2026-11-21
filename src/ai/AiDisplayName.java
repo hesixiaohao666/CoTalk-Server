@@ -35,4 +35,54 @@ public final class AiDisplayName {
         }
         return name + "（@" + account + "）";
     }
+
+    /**
+     * AI 自身消息识别：优先 senderUsername，旧数据回退到固定 senderId。
+     */
+    public static boolean isAi(Message message) {
+        if (message == null) {
+            return false;
+        }
+        if (AiResponder.AI_USER_ID.equals(message.senderId)) {
+            return true;
+        }
+        return message.senderUsername != null
+                && AiResponder.AI_USERNAME.equalsIgnoreCase(
+                message.senderUsername.trim());
+    }
+
+    /**
+     * 引用快照在 AI 上下文中的标记：[引用 发送者：内容]。
+     * 引用是旧消息，当前消息正文才是用户此刻表达的内容。
+     */
+    public static String replyTag(Message message) {
+        if (message == null || message.replyToMsgId == null
+                || message.replyToMsgId.trim().isEmpty()) {
+            return "";
+        }
+        String name = message.replySenderName == null
+                || message.replySenderName.trim().isEmpty()
+                ? "成员" : message.replySenderName.trim();
+        String preview;
+        if (message.replyRecalled) {
+            preview = "原消息已撤回";
+        } else {
+            String type = message.replyType == null
+                    ? "text" : message.replyType;
+            if ("image".equals(type)) {
+                preview = "[图片]";
+            } else if ("emoji".equals(type)) {
+                preview = "[表情]";
+            } else if ("voice".equals(type)) {
+                preview = "[语音]";
+            } else {
+                preview = message.replyPreview == null
+                        ? "" : message.replyPreview.trim();
+            }
+        }
+        if (preview.isEmpty()) {
+            preview = "消息";
+        }
+        return "[引用 " + name + "：" + preview + "] ";
+    }
 }

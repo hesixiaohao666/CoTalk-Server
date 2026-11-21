@@ -67,7 +67,7 @@ public final class AiProImportExport {
                 Files.readString(absolute, StandardCharsets.UTF_8));
         if (root == null || !root.has("format")
                 || !FORMAT.equals(string(root, "format", ""))) {
-            throw new IllegalArgumentException("不是有效的 AI Pro 记忆文件");
+            throw new IllegalArgumentException("不是有效的 AI 记忆文件");
         }
         int version = intValue(root, "version", -1);
         if (version != VERSION) {

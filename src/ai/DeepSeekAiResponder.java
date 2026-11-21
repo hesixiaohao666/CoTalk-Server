@@ -129,7 +129,8 @@ public class DeepSeekAiResponder implements AiResponder {
         if (!triggered) {
             return;
         }
-        String line = AiDisplayName.of(sender) + "：" + content.trim();
+        String line = AiDisplayName.of(sender) + "："
+                + AiDisplayName.replyTag(message) + content.trim();
         if (line.length() > 500) {
             line = line.substring(0, 500) + "…";
         }
@@ -406,7 +407,7 @@ public class DeepSeekAiResponder implements AiResponder {
 
     protected void handleMandatoryFailure(String detail) {
         if (silentOnFailure()) {
-            sink.reportError(detail + "，AI Pro 静默不发送");
+            sink.reportError(detail + "，AI 静默不发送");
             return;
         }
         sendMandatoryFallback();
@@ -414,7 +415,7 @@ public class DeepSeekAiResponder implements AiResponder {
 
     protected void handleCallFailure(String detail) {
         if (silentOnFailure()) {
-            sink.reportError(detail + "，AI Pro 静默不发送");
+            sink.reportError(detail + "，AI 静默不发送");
             return;
         }
         sink.reportFailure(config.aiName + "暂时无法回复，请稍后再试");
@@ -567,14 +568,22 @@ public class DeepSeekAiResponder implements AiResponder {
                 continue;
             }
 
+            boolean aiMessage = AiDisplayName.isAi(message);
             if ("image".equals(message.type) || "emoji".equals(message.type)) {
                 String label = mediaLabel(message);
-                String sender = AiDisplayName.of(message);
-                StringBuilder text = new StringBuilder(sender)
-                        .append("：").append(label);
+                StringBuilder text = new StringBuilder();
+                if (!aiMessage) {
+                    text.append(AiDisplayName.of(message)).append("：")
+                            .append(AiDisplayName.replyTag(message));
+                }
+                text.append(label);
                 if (message.content != null
                         && !message.content.trim().isEmpty()) {
                     text.append(" ").append(message.content.trim());
+                }
+                if (aiMessage) {
+                    result.add(new AiMessage("assistant", text.toString()));
+                    continue;
                 }
                 List<AiImagePart> images = new ArrayList<>();
                 if (message.fileId != null
@@ -595,8 +604,12 @@ public class DeepSeekAiResponder implements AiResponder {
             }
 
             if ("voice".equals(message.type)) {
-                result.add(new AiMessage("user",
-                        AiDisplayName.of(message) + "：[语音]"));
+                String text = aiMessage
+                        ? "[语音]"
+                        : AiDisplayName.of(message) + "："
+                        + AiDisplayName.replyTag(message) + "[语音]";
+                result.add(new AiMessage(
+                        aiMessage ? "assistant" : "user", text));
                 continue;
             }
 
@@ -604,11 +617,13 @@ public class DeepSeekAiResponder implements AiResponder {
                     || message.content.trim().isEmpty()) {
                 continue;
             }
-            if (AI_USER_ID.equals(message.senderId)) {
+            if (aiMessage) {
                 result.add(new AiMessage("assistant", message.content));
             } else {
                 result.add(new AiMessage("user",
-                        AiDisplayName.of(message) + "：" + message.content));
+                        AiDisplayName.of(message) + "："
+                                + AiDisplayName.replyTag(message)
+                                + message.content));
             }
         }
 

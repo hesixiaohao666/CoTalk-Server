@@ -141,6 +141,7 @@ public class MessageService {
         message.seq = nextSeq;
         message.senderId = aiMember.id;
         message.senderName = aiMember.nickname;
+        message.senderUsername = aiMember.username;
         message.senderTag = "";
         message.senderAvatarVersion = aiMember.avatarVersion;
         message.content = content;
@@ -161,6 +162,7 @@ public class MessageService {
         message.seq = nextSeq;
         message.senderId = aiMember.id;
         message.senderName = aiMember.nickname;
+        message.senderUsername = aiMember.username;
         message.senderTag = "";
         message.senderAvatarVersion = aiMember.avatarVersion;
         message.content = content == null ? "" : content;

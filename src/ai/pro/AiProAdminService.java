@@ -362,7 +362,7 @@ public class AiProAdminService {
             try {
                 rebuild.run();
             } catch (Exception e) {
-                logger.accept("重建 AI Pro 索引失败：" + e.getMessage());
+                logger.accept("重建 AI 索引失败：" + e.getMessage());
             }
         }
     }

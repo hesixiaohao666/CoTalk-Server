@@ -18,6 +18,18 @@ public final class AiPrompts {
     public static final String REPAIR_INSTRUCTION =
             AiJsonContract.REPAIR_INSTRUCTION;
 
+    /**
+     * 上下文身份与引用规则，供基础/Pro 提示词共用。
+     */
+    public static final String CONTEXT_RULES =
+            "上下文规则："
+                    + "1. 你的稳定用户名是 @AI，所有 AI 消息（文字、表情、图片）都是你自己，"
+                    + "不得当作其他成员。"
+                    + "2. 消息前的 [引用 发送者：内容] 是被引用的旧消息；"
+                    + "当前消息正文才是发送者此刻表达的内容。"
+                    + "3. 成员以 昵称（@用户名） 标识；同一 @用户名 的成员重进群不是新用户，"
+                    + "加入/离开消息只表示在线状态，不要欢迎为新成员。";
+
     public static final String DEFAULT_CUSTOM_PROMPT =
             "你是“大肥鱼”，性格活泼、幽默，喜欢摸鱼，说话简短自然。"
                     + "可以适当使用轻松的网络表达，但不要过度玩梗，不要冒充人类。";
@@ -45,6 +57,7 @@ public final class AiPrompts {
                 ? ""
                 : "\n\n【本次回复规则】\n" + triggerRule.trim();
         return FORCED_PROMPT
+                + "\n\n【上下文规则】\n" + CONTEXT_RULES
                 + "\n\n【自定义人设】\n" + custom
                 + rule
                 + "\n\n【输出限制】每条最多" + maxChars
