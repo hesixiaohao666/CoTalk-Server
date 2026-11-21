@@ -20,7 +20,10 @@ public class MessageStore {
             "msg_uuid, seq, sender_id, sender_name, sender_username, sender_tag, "
                     + "sender_avatar_version, content, msg_type, "
                     + "file_id, file_name, file_mime, file_size, file_expired, "
-                    + "recalled, recall_notice, sender_admin, created_at";
+                    + "recalled, recall_notice, sender_admin, "
+                    + "reply_to_msg_id, reply_sender_name, "
+                    + "reply_sender_username, reply_preview, reply_type, "
+                    + "reply_recalled, created_at";
 
     private final Database database;
 
@@ -73,8 +76,11 @@ public class MessageStore {
                         + "sender_username, sender_tag, sender_avatar_version, "
                         + "content, msg_type, "
                         + "file_id, file_name, file_mime, file_size, "
-                        + "file_expired, sender_admin, created_at) "
-                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        + "file_expired, sender_admin, reply_to_msg_id, "
+                        + "reply_sender_name, reply_sender_username, "
+                        + "reply_preview, reply_type, reply_recalled, "
+                        + "created_at) "
+                        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setString(1, message.msgUuid);
             statement.setLong(2, message.seq);
             statement.setString(3, message.senderId);
@@ -90,7 +96,13 @@ public class MessageStore {
             statement.setLong(13, message.fileSize);
             statement.setInt(14, message.fileExpired ? 1 : 0);
             statement.setInt(15, message.senderAdmin ? 1 : 0);
-            statement.setLong(16, message.createdAt);
+            statement.setString(16, message.replyToMsgId);
+            statement.setString(17, message.replySenderName);
+            statement.setString(18, message.replySenderUsername);
+            statement.setString(19, message.replyPreview);
+            statement.setString(20, message.replyType);
+            statement.setInt(21, message.replyRecalled ? 1 : 0);
+            statement.setLong(22, message.createdAt);
             statement.executeUpdate();
         }
     }
@@ -139,6 +151,18 @@ public class MessageStore {
     /**
      * 只设置撤回标记，原消息内容和附件元数据保持不动。
      */
+    public int markReplyRecalled(String targetMsgUuid) throws SQLException {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE message SET reply_recalled = 1 "
+                            + "WHERE reply_to_msg_id = ? AND reply_recalled = 0")) {
+                statement.setString(1, targetMsgUuid);
+                return statement.executeUpdate();
+            }
+        }
+    }
+
     public boolean markRecalled(String msgUuid, String notice) throws SQLException {
         synchronized (database) {
             Connection connection = database.connection();
@@ -259,6 +283,13 @@ public class MessageStore {
             message.recalled = result.getInt("recalled") != 0;
             message.recallNotice = result.getString("recall_notice");
             message.senderAdmin = result.getInt("sender_admin") != 0;
+            message.replyToMsgId = result.getString("reply_to_msg_id");
+            message.replySenderName = result.getString("reply_sender_name");
+            message.replySenderUsername = result.getString(
+                    "reply_sender_username");
+            message.replyPreview = result.getString("reply_preview");
+            message.replyType = result.getString("reply_type");
+            message.replyRecalled = result.getInt("reply_recalled") != 0;
             message.createdAt = result.getLong("created_at");
             messages.add(message);
         }

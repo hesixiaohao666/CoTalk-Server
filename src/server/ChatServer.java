@@ -1056,6 +1056,8 @@ public class ChatServer implements AiReplySink {
         json.addProperty("seq", message.seq);
         json.addProperty("senderId", message.senderId);
         json.addProperty("senderName", message.senderName);
+        json.addProperty("senderUsername",
+                message.senderUsername == null ? "" : message.senderUsername);
         json.addProperty("senderAvatarVersion", message.senderAvatarVersion);
         json.addProperty("content", message.content);
         json.addProperty("type", message.type);
@@ -1068,6 +1070,28 @@ public class ChatServer implements AiReplySink {
                     message.fileMime == null ? "" : message.fileMime);
             json.addProperty("fileSize", message.fileSize);
             json.addProperty("fileExpired", message.fileExpired);
+        }
+        if (message.replyToMsgId != null
+                && !message.replyToMsgId.isEmpty()) {
+            JsonObject reply = new JsonObject();
+            reply.addProperty("msgId", message.replyToMsgId);
+            reply.addProperty("seq", message.replyToSeq);
+            reply.addProperty("senderName",
+                    message.replySenderName == null
+                            ? "" : message.replySenderName);
+            reply.addProperty("senderUsername",
+                    message.replySenderUsername == null
+                            ? "" : message.replySenderUsername);
+            reply.addProperty("preview",
+                    message.replyRecalled
+                            ? "原消息已撤回"
+                            : (message.replyPreview == null
+                            ? "" : message.replyPreview));
+            reply.addProperty("type",
+                    message.replyType == null
+                            ? "text" : message.replyType);
+            reply.addProperty("recalled", message.replyRecalled);
+            json.add("reply", reply);
         }
         json.addProperty("ts", message.createdAt);
         if (includeSelf) {

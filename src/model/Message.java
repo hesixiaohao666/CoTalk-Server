@@ -22,5 +22,12 @@ public class Message {
     public boolean recalled;
     public String recallNotice;
     public boolean senderAdmin;
+    public String replyToMsgId;
+    public long replyToSeq;
+    public String replySenderName;
+    public String replySenderUsername;
+    public String replyPreview;
+    public String replyType;
+    public boolean replyRecalled;
     public long createdAt;
 }

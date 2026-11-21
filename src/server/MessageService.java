@@ -71,6 +71,17 @@ public class MessageService {
                                                 String type,
                                                 Attachment attachment)
             throws SQLException {
+        return createAndStore(sender, clientTag, content, type,
+                attachment, null);
+    }
+
+    public synchronized Message createAndStore(Member sender,
+                                                String clientTag,
+                                                String content,
+                                                String type,
+                                                Attachment attachment,
+                                                Message replyTarget)
+            throws SQLException {
         Message message = new Message();
         message.msgUuid = newMsgUuid();
         message.seq = nextSeq;
@@ -80,6 +91,15 @@ public class MessageService {
         message.senderTag = clientTag;
         message.senderAvatarVersion = sender.avatarVersion;
         message.senderAdmin = sender.admin;
+        if (replyTarget != null) {
+            message.replyToMsgId = replyTarget.msgUuid;
+            message.replyToSeq = replyTarget.seq;
+            message.replySenderName = replyTarget.senderName;
+            message.replySenderUsername = replyTarget.senderUsername;
+            message.replyPreview = replyPreview(replyTarget);
+            message.replyType = replyTarget.type;
+            message.replyRecalled = replyTarget.recalled;
+        }
         message.content = content == null ? "" : content;
         message.type = type == null || type.isEmpty() ? "text" : type;
         message.createdAt = System.currentTimeMillis();
@@ -159,6 +179,34 @@ public class MessageService {
         return message;
     }
 
+    public synchronized Message findByMsgId(String msgId) throws SQLException {
+        if (msgId == null || msgId.isEmpty()) {
+            return null;
+        }
+        return messageStore.findByMsgUuid(msgId);
+    }
+
+    public static String replyPreview(Message target) {
+        if (target == null) {
+            return "";
+        }
+        if (target.recalled) {
+            return "原消息已撤回";
+        }
+        String type = target.type == null ? "text" : target.type;
+        if ("image".equals(type)) {
+            return "[图片]";
+        }
+        if ("emoji".equals(type)) {
+            return "[表情]";
+        }
+        if ("voice".equals(type)) {
+            return "[语音]";
+        }
+        return ServerLogService.preview(
+                target.content == null ? "" : target.content, 200);
+    }
+
     public synchronized long lastSeq() {
         return Math.max(0L, nextSeq - 1);
     }
@@ -230,6 +278,11 @@ public class MessageService {
         }
         message.recalled = true;
         message.recallNotice = notice;
+        try {
+            messageStore.markReplyRecalled(message.msgUuid);
+        } catch (SQLException ignored) {
+            // 引用标记失败不影响撤回本身
+        }
         return RecallResult.success(message, notice, message.fileId);
     }
 

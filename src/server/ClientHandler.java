@@ -937,6 +937,22 @@ public class ClientHandler implements Runnable {
         }
         String content = optString(data, "content", "").trim();
 
+        String replyToMsgId = optString(data, "replyToMsgId", "").trim();
+        Message replyTarget = null;
+        if (!replyToMsgId.isEmpty()) {
+            try {
+                replyTarget = messageService.findByMsgId(replyToMsgId);
+            } catch (Exception e) {
+                replyTarget = null;
+            }
+            if (replyTarget == null || replyTarget.createdAt
+                    < System.currentTimeMillis()
+                    - StoragePolicy.RETENTION_MS) {
+                send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                        "引用的消息不存在或已过期", reqId));
+                return;
+            }
+        }
         if ("text".equals(type)) {
             if (content.isEmpty() || content.length() > 1000) {
                 send(Protocol.error(Protocol.ERR_INVALID_INPUT,
@@ -945,7 +961,8 @@ public class ClientHandler implements Runnable {
             }
             try {
                 Message message = messageService.createAndStore(
-                        member, clientTag, content);
+                        member, clientTag, content, "text", null,
+                        replyTarget);
                 acceptMessage(clientMsgId, message, reqId, content, message.seq);
                 server.onChatMessage(member, message);
             } catch (Exception e) {
@@ -1003,7 +1020,7 @@ public class ClientHandler implements Runnable {
             saved = attachmentService.save(
                     decoded.bytes, decoded.mime, decoded.fileName);
             Message message = messageService.createAndStore(
-                    member, clientTag, content, type, saved);
+                    member, clientTag, content, type, saved, replyTarget);
             stored = true;
             acceptMessage(clientMsgId, message, reqId,
                     previewFor(type, saved.fileName), message.seq);
@@ -1032,8 +1049,14 @@ public class ClientHandler implements Runnable {
         recentAcks.put(clientMsgId, ack);
         sendAck(ack, reqId);
         server.broadcastMessage(message, this);
+        String replyPart = "";
+        if (message.replyToMsgId != null && !message.replyToMsgId.isEmpty()) {
+            replyPart = "([引用#" + message.replyToSeq + "] "
+                    + message.replySenderName + ": "
+                    + message.replyPreview + ") ";
+        }
         server.getEvents().onLog("[#" + seq + "] "
-                + member.nickname + ": "
+                + member.nickname + ": " + replyPart
                 + ServerLogService.preview(
                 logPreview, config.logMessagePreviewChars));
     }
