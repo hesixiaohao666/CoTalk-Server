@@ -684,6 +684,22 @@ public class ChatServer implements AiReplySink {
         events.onMembersChanged(memberSnapshot());
     }
 
+    /**
+     * 在线人数只统计 online=true 的成员；离线身份成员仍保留在总成员快照中。
+     */
+    public static long onlineCount(List<Member> members) {
+        if (members == null || members.isEmpty()) {
+            return 0L;
+        }
+        long online = 0L;
+        for (Member member : members) {
+            if (member != null && member.online) {
+                online++;
+            }
+        }
+        return online;
+    }
+
     public List<Member> memberSnapshot() {
         List<Member> members = new ArrayList<>(roomService.snapshot());
         IdentityService service = identityService;

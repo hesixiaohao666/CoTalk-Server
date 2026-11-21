@@ -173,8 +173,19 @@ public class ClientHandler implements Runnable {
         String reqId = optString(frame, "reqId", "");
 
         if (version != Protocol.VERSION) {
-            send(Protocol.error(Protocol.ERR_PROTOCOL,
-                    "协议版本不兼容，请升级客户端", reqId));
+            // 旧版客户端通常连 HELLO 都使用旧协议号：按版本错误返回，
+            // 便于客户端展示服务端版本与允许区间。
+            boolean oldHello = state == State.CONNECTED
+                    && Protocol.HELLO.equals(type);
+            sendVersionError(
+                    oldHello ? Protocol.ERR_CLIENT_VERSION
+                            : Protocol.ERR_PROTOCOL,
+                    oldHello
+                            ? "客户端版本不在允许范围（"
+                            + VersionPolicy.MIN_CLIENT_VERSION_CODE + "–"
+                            + VersionPolicy.MAX_CLIENT_VERSION_CODE + "）"
+                            : "协议版本不兼容，请升级客户端",
+                    reqId);
             return false;
         }
 
@@ -255,6 +266,9 @@ public class ClientHandler implements Runnable {
             case Protocol.HISTORY_REQ:
                 handleHistory(data, reqId);
                 return true;
+            case Protocol.SYNC_REQ:
+                handleSync(data, reqId);
+                return true;
             case Protocol.PROFILE_UPDATE:
                 handleProfileUpdate(data, reqId);
                 return true;
@@ -306,11 +320,11 @@ public class ClientHandler implements Runnable {
         String clientVersionName = optString(data, "clientVersionName", "");
 
         if (!VersionPolicy.isClientVersionSupported(clientVersionCode)) {
-            send(Protocol.error(Protocol.ERR_CLIENT_VERSION,
+            sendVersionError(Protocol.ERR_CLIENT_VERSION,
                     "客户端版本不在允许范围（"
                             + VersionPolicy.MIN_CLIENT_VERSION_CODE + "–"
                             + VersionPolicy.MAX_CLIENT_VERSION_CODE + "）",
-                    reqId));
+                    reqId);
             return false;
         }
         this.clientVersionCode = clientVersionCode;
@@ -1522,6 +1536,58 @@ public class ClientHandler implements Runnable {
                     "附件读取失败，请稍后重试", reqId));
             server.getEvents().onLog("附件读取失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 7 天消息同步：按 seq 升序分页返回，包含撤回覆盖与引用快照。
+     * 客户端以 afterSeq 连续拉取，直到 hasMore=false。
+     */
+    private void handleSync(JsonObject data, String reqId) {
+        try {
+            long afterSeq = data.has("afterSeq")
+                    && data.get("afterSeq").isJsonPrimitive()
+                    ? Math.max(0L, data.get("afterSeq").getAsLong())
+                    : 0L;
+            int limit = data.has("limit") && data.get("limit").isJsonPrimitive()
+                    ? data.get("limit").getAsInt()
+                    : config.syncPageSize;
+            limit = Math.max(1, Math.min(limit, 500));
+
+            List<Message> messages = messageService.after(afterSeq, limit);
+            JsonArray array = new JsonArray();
+            long lastSeq = afterSeq;
+            for (Message message : messages) {
+                array.add(ChatServer.messageJsonForClient(
+                        message,
+                        true,
+                        ChatServer.isSelf(message, clientTag),
+                        clientVersionCode
+                ));
+                lastSeq = Math.max(lastSeq, message.seq);
+            }
+
+            JsonObject response = new JsonObject();
+            response.add("messages", array);
+            response.addProperty("hasMore", messages.size() == limit);
+            response.addProperty("lastSeq", lastSeq);
+            send(Protocol.frame(Protocol.SYNC_RES, reqId, response));
+        } catch (Exception e) {
+            send(Protocol.error(Protocol.ERR_DB,
+                    "同步消息失败，请稍后重试", reqId));
+            server.getEvents().onLog("同步消息失败：" + e.getMessage());
+        }
+    }
+
+    private void sendVersionError(int code, String message, String reqId) {
+        JsonObject error = Protocol.error(code, message, reqId);
+        JsonObject data = error.getAsJsonObject("data");
+        data.addProperty("serverVersionCode", ServerVersion.VERSION_CODE);
+        data.addProperty("serverVersionName", ServerVersion.VERSION_NAME);
+        data.addProperty("minClientVersionCode",
+                VersionPolicy.MIN_CLIENT_VERSION_CODE);
+        data.addProperty("maxClientVersionCode",
+                VersionPolicy.MAX_CLIENT_VERSION_CODE);
+        send(error);
     }
 
     private void handleHistory(JsonObject data, String reqId) {

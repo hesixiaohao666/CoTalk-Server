@@ -221,21 +221,28 @@ public final class HeadlessCommandProcessor {
 
     private void status() {
         ServerConfig config = runtime.getConfig();
+        List<Member> members = runtime.getMembers();
         log("状态：" + (runtime.isRunning() ? "运行中" : "已停止")
                 + "，端口：" + config.port
                 + "，房间：" + (runtime.getRoom() == null
                 ? "-" : runtime.getRoom().name)
-                + "，在线：" + runtime.getMembers().size()
+                + "，在线：" + ChatServer.onlineCount(members)
+                + "，成员：" + members.size()
                 + "，AI：" + runtime.getAiStatus());
     }
 
     private void members() {
         List<Member> members = runtime.getMembers();
-        if (members.isEmpty()) {
+        long online = ChatServer.onlineCount(members);
+        log("在线 " + online + " 人（共 " + members.size() + " 人）");
+        if (online == 0) {
             log("暂无在线成员");
             return;
         }
         for (Member member : members) {
+            if (!member.online) {
+                continue;
+            }
             log((member.ai ? "[AI] " : "") + member.nickname);
         }
     }

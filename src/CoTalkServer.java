@@ -609,9 +609,10 @@ public class CoTalkServer extends JFrame {
 
     private void updateMembers(List<Member> members) {
         memberModel.clear();
+        long online = ChatServer.onlineCount(members);
         memberBorder.setTitle(members.isEmpty()
                 ? "群聊成员"
-                : "群聊成员（" + members.size() + "）");
+                : "群聊成员（在线 " + online + " / 共 " + members.size() + "）");
         if (memberListPanel != null) {
             memberListPanel.repaint();
         }
@@ -624,7 +625,7 @@ public class CoTalkServer extends JFrame {
                 memberModel.addElement(member.nickname + suffix);
             }
         }
-        memberCountLabel.setText(members.size() + " 人");
+        memberCountLabel.setText(online + " / " + members.size() + " 人");
     }
 
     private void appendLog(String message) {

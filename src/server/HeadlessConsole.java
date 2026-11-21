@@ -56,7 +56,8 @@ public final class HeadlessConsole {
 
             @Override
             public void onMembersChanged(List<Member> members) {
-                log("在线 " + members.size() + " 人");
+                log("在线 " + ChatServer.onlineCount(members)
+                        + " 人（共 " + members.size() + " 人）");
             }
 
             @Override
