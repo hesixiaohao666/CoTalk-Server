@@ -345,6 +345,13 @@ public class ServerSettingsDialog extends JDialog {
                             .setVisible(true));
             addRow(panel, row++, "群聊身份", moderation,
                     "入群审核与移除用户");
+
+            JCheckBox muteAll = new JCheckBox("全员禁言");
+            muteAll.setSelected(runtime.isMuteAll());
+            muteAll.addActionListener(e -> runtime.setMuteAll(
+                    muteAll.isSelected(), "server-gui"));
+            addRow(panel, row++, "全员禁言", muteAll,
+                    "开启后普通用户与 AI 均静默，系统消息正常");
         }
 
         addNote(panel, row++,

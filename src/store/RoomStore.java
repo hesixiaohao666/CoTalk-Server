@@ -32,23 +32,38 @@ public class RoomStore {
         }
     }
 
+    public void updateMuteAll(boolean muteAll) throws Exception {
+        synchronized (database) {
+            java.sql.Connection connection = database.connection();
+            try (PreparedStatement update = connection.prepareStatement(
+                    "UPDATE room SET mute_all = ? WHERE id = 1")) {
+                update.setInt(1, muteAll ? 1 : 0);
+                update.executeUpdate();
+            }
+        }
+    }
+
     public Room loadOrCreate(String name, String announcement) throws Exception {
         synchronized (database) {
             Connection connection = database.connection();
             long createdAt = System.currentTimeMillis();
 
             try (PreparedStatement query = connection.prepareStatement(
-                    "SELECT name, announcement, created_at FROM room WHERE id = 1");
+                    "SELECT name, announcement, mute_all, created_at "
+                            + "FROM room WHERE id = 1");
                  ResultSet result = query.executeQuery()) {
                 if (result.next()) {
                     createdAt = result.getLong("created_at");
+                    boolean muteAll = result.getInt("mute_all") == 1;
                     try (PreparedStatement update = connection.prepareStatement(
                             "UPDATE room SET name = ?, announcement = ? WHERE id = 1")) {
                         update.setString(1, name);
                         update.setString(2, announcement);
                         update.executeUpdate();
                     }
-                    return new Room(name, announcement, createdAt);
+                    Room room = new Room(name, announcement, createdAt);
+                    room.muteAll = muteAll;
+                    return room;
                 }
             }
 

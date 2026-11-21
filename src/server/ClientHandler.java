@@ -241,6 +241,12 @@ public class ClientHandler implements Runnable {
             case Protocol.EXIT_ROOM_REQ:
                 handleExitRoom(data, reqId);
                 return !closed.get();
+            case Protocol.ADMIN_MUTE_REQ:
+                handleAdminMute(data, reqId);
+                return true;
+            case Protocol.ROOM_MUTE_ALL_REQ:
+                handleRoomMuteAll(data, reqId);
+                return true;
             case Protocol.LEAVE:
                 return false;
             case Protocol.CHAT:
@@ -709,6 +715,7 @@ public class ClientHandler implements Runnable {
         server.dropPendingNickname(nickname, member.id);
         member.username = identityAccount.username;
         member.admin = identityAccount.admin;
+        member.muted = identityAccount.muted;
         if (avatarData != null) {
             try {
                 member.avatarVersion = avatarService.save(member.id, avatarData);
@@ -783,6 +790,7 @@ public class ClientHandler implements Runnable {
         roomJson.addProperty("lastSeq", messageService.lastSeq());
         roomJson.addProperty("avatarId", server.getRoomAvatarId());
         roomJson.addProperty("avatarVersion", server.getRoomAvatarVersion());
+        roomJson.addProperty("muteAll", room.muteAll && config.adminEnabled);
         data.add("room", roomJson);
 
         JsonArray members = new JsonArray();
@@ -894,6 +902,9 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleChat(JsonObject data, String reqId) {
+        if (!canSend(reqId)) {
+            return;
+        }
         String clientMsgId = optString(data, "clientMsgId", "");
         if (clientMsgId.isEmpty()) {
             clientMsgId = "cm-" + UUID.randomUUID().toString()
@@ -1061,6 +1072,9 @@ public class ClientHandler implements Runnable {
     }
 
     private void handlePoke(JsonObject data, String reqId) {
+        if (!canSend(reqId)) {
+            return;
+        }
         String targetId = optString(data, "targetId", "").trim();
         if (targetId.isEmpty()) {
             send(Protocol.error(Protocol.ERR_INVALID_INPUT,
@@ -1341,6 +1355,9 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleRecallRequest(JsonObject data, String reqId) {
+        if (!canSend(reqId)) {
+            return;
+        }
         String msgId = optString(data, "msgId", "").trim();
         if (msgId.isEmpty()) {
             send(Protocol.error(Protocol.ERR_INVALID_INPUT,
@@ -1364,6 +1381,86 @@ public class ClientHandler implements Runnable {
                     + (member.nickname == null ? "" : member.nickname)
                     + " 强制撤回 #" + result.message.seq);
         }
+    }
+
+    private boolean canSend(String reqId) {
+        if (member == null) {
+            send(Protocol.error(Protocol.ERR_NOT_JOINED,
+                    "请先加入群聊", reqId));
+            return false;
+        }
+        if (member.muted) {
+            send(Protocol.error(Protocol.ERR_MUTED,
+                    "您已被禁言", reqId));
+            return false;
+        }
+        Room room = roomService.getRoom();
+        if (room.muteAll && config.adminEnabled && !member.admin) {
+            send(Protocol.error(Protocol.ERR_MUTE_ALL,
+                    "全员禁言中", reqId));
+            return false;
+        }
+        return true;
+    }
+
+    private void handleAdminMute(JsonObject data, String reqId) {
+        if (!adminAllowed(reqId)) {
+            return;
+        }
+        String identityId = optString(data, "identityId", "");
+        boolean muted = data.has("muted")
+                && data.get("muted").getAsBoolean();
+        if (identityId.isEmpty()) {
+            send(Protocol.error(Protocol.ERR_INVALID_INPUT,
+                    "缺少 identityId", reqId));
+            return;
+        }
+        if (member != null && identityId.equals(member.id)) {
+            send(Protocol.error(Protocol.ERR_ADMIN_SELF,
+                    "不能禁言自己", reqId));
+            return;
+        }
+        try {
+            IdentityAccount target = server.getIdentityService()
+                    .findById(identityId);
+            if (target != null && target.admin) {
+                send(Protocol.error(Protocol.ERR_ADMIN_SELF,
+                        "不能禁言管理员", reqId));
+                return;
+            }
+            IdentityAccount account = server.setMuted(
+                    identityId, muted, member.nickname);
+            if (account == null) {
+                send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                        "用户不存在", reqId));
+                return;
+            }
+            JsonObject response = new JsonObject();
+            response.addProperty("success", true);
+            response.addProperty("message", muted ? "已禁言" : "已解除禁言");
+            send(Protocol.frame(Protocol.ADMIN_MUTE_RES, reqId, response));
+        } catch (Exception e) {
+            server.getEvents().onError("禁言操作失败", e);
+            send(Protocol.error(Protocol.ERR_ADMIN_REVIEW,
+                    "禁言操作失败", reqId));
+        }
+    }
+
+    private void handleRoomMuteAll(JsonObject data, String reqId) {
+        if (!adminAllowed(reqId)) {
+            return;
+        }
+        boolean muteAll = data.has("muteAll")
+                && data.get("muteAll").getAsBoolean();
+        if (!server.setMuteAll(muteAll, member.nickname)) {
+            send(Protocol.error(Protocol.ERR_ADMIN_DISABLED,
+                    "管理员模式未启用", reqId));
+            return;
+        }
+        JsonObject response = new JsonObject();
+        response.addProperty("success", true);
+        response.addProperty("muteAll", muteAll);
+        send(Protocol.frame(Protocol.ROOM_MUTE_ALL_RES, reqId, response));
     }
 
     private void handleFileRequest(JsonObject data, String reqId) {

@@ -57,9 +57,9 @@ public class IdentityStore {
             try (PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO chat_identity("
                             + "id, username, salt, iterations, verifier, "
-                            + "nickname, status, admin, created_at, "
+                            + "nickname, status, admin, muted, created_at, "
                             + "updated_at, last_login_at, last_seen_at"
-                            + ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                            + ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
                 statement.setString(1, account.id);
                 statement.setString(2, normalize(account.username));
                 statement.setString(3, account.salt);
@@ -68,10 +68,11 @@ public class IdentityStore {
                 statement.setString(6, account.nickname);
                 statement.setString(7, account.status);
                 statement.setInt(8, account.admin ? 1 : 0);
-                statement.setLong(9, account.createdAt);
-                statement.setLong(10, account.updatedAt);
-                statement.setLong(11, account.lastLoginAt);
-                statement.setLong(12, account.lastSeenAt);
+                statement.setInt(9, account.muted ? 1 : 0);
+                statement.setLong(10, account.createdAt);
+                statement.setLong(11, account.updatedAt);
+                statement.setLong(12, account.lastLoginAt);
+                statement.setLong(13, account.lastSeenAt);
                 statement.executeUpdate();
             }
         }
@@ -85,6 +86,11 @@ public class IdentityStore {
     public void updateSeen(String id, long seenAt) throws Exception {
         update(id, "last_seen_at = ?, updated_at = ?",
                 seenAt, seenAt);
+    }
+
+    public void setMuted(String id, boolean muted) throws Exception {
+        update(id, "muted = ?, updated_at = ?",
+                muted ? 1L : 0L, System.currentTimeMillis());
     }
 
     public void updateNickname(String id, String nickname) throws Exception {
@@ -192,6 +198,7 @@ public class IdentityStore {
         account.nickname = result.getString("nickname");
         account.status = result.getString("status");
         account.admin = result.getInt("admin") == 1;
+        account.muted = result.getInt("muted") == 1;
         account.createdAt = result.getLong("created_at");
         account.updatedAt = result.getLong("updated_at");
         account.lastLoginAt = result.getLong("last_login_at");

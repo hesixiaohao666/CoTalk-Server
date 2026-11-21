@@ -18,6 +18,7 @@ public final class IdentityAccount {
     public String nickname = "";
     public String status = STATUS_PENDING;
     public boolean admin;
+    public boolean muted;
     public long createdAt;
     public long updatedAt;
     public long lastLoginAt;

@@ -78,6 +78,9 @@ public final class HeadlessCommandProcessor {
             case "recall":
                 recall(rest);
                 return true;
+            case "muteall":
+                muteAll(rest);
+                return true;
             case "config":
                 config(rest);
                 return true;
@@ -157,6 +160,7 @@ public final class HeadlessCommandProcessor {
         log("  members                查看在线成员");
         log("  broadcast <text>       向房间广播系统消息");
         log("  recall <seq>           强制撤回指定消息");
+        log("  muteall on|off         开启/关闭全员禁言");
         log("  stop | quit | exit     停止服务并退出");
     }
 
@@ -243,6 +247,21 @@ public final class HeadlessCommandProcessor {
         }
         runtime.broadcast(text);
         log("广播：" + text);
+    }
+
+    private void muteAll(String value) {
+        String mode = value == null ? "" : value.trim().toLowerCase(
+                java.util.Locale.ROOT);
+        if (!"on".equals(mode) && !"off".equals(mode)) {
+            log("用法：muteall on|off");
+            return;
+        }
+        boolean enabled = "on".equals(mode);
+        if (runtime.setMuteAll(enabled, OPERATOR)) {
+            log(enabled ? "已开启全员禁言" : "已关闭全员禁言");
+        } else {
+            log("全员禁言设置失败");
+        }
     }
 
     private void recall(String value) {
@@ -897,6 +916,7 @@ public final class HeadlessCommandProcessor {
     private void unknownRoot(String root) {
         String suggestion = suggest(root,
                 "help", "status", "members", "broadcast", "recall",
+                "muteall",
                 "config", "aipro", "ai", "stop");
         log("未知命令：" + root
                 + (suggestion == null ? "" : "，是否想输入 " + suggestion)

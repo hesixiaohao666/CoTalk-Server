@@ -270,6 +270,15 @@ public final class ServerRuntime {
         }
     }
 
+    public boolean setMuteAll(boolean muteAll, String operator) {
+        return chatServer != null
+                && chatServer.setMuteAll(muteAll, operator);
+    }
+
+    public boolean isMuteAll() {
+        return room != null && room.muteAll;
+    }
+
     public boolean isRunning() {
         return chatServer != null && chatServer.isRunning();
     }

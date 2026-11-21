@@ -127,6 +127,25 @@ public class IdentityService {
                 account.iterations, account.verifier);
     }
 
+    public IdentityAccount setMuted(String identityId,
+                                    boolean muted,
+                                    String operator) throws Exception {
+        IdentityAccount account = store.findById(identityId);
+        if (account == null) {
+            return null;
+        }
+        store.setMuted(account.id, muted);
+        account.muted = muted;
+        account.updatedAt = System.currentTimeMillis();
+        events.record(account.id, account.username,
+                muted ? "mute" : "unmute", operator, "");
+        logger.accept((muted ? "[禁言] " : "[解除禁言] ")
+                + "用户名=" + account.username
+                + " 昵称=" + account.nickname
+                + " 操作者=" + operator);
+        return account;
+    }
+
     public IdentityAccount exit(String identityId, String operator)
             throws Exception {
         IdentityAccount account = store.findById(identityId);

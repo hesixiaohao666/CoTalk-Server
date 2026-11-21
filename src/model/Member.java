@@ -8,6 +8,7 @@ public class Member {
     public volatile String signature;
     public volatile int avatarVersion;
     public volatile boolean admin;
+    public volatile boolean muted;
     public volatile boolean online = true;
     public final boolean ai;
     public final String ip;

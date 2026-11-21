@@ -111,6 +111,44 @@ public class ChatServer implements AiReplySink {
         }
     }
 
+    public IdentityAccount setMuted(String identityId,
+                                    boolean muted,
+                                    String operator) throws Exception {
+        IdentityService service = identityService;
+        if (service == null) {
+            return null;
+        }
+        IdentityAccount account = service.setMuted(identityId, muted, operator);
+        if (account == null) {
+            return null;
+        }
+        Member online = roomService.find(identityId);
+        if (online != null && !online.ai) {
+            online.muted = muted;
+        }
+        broadcastMemberList();
+        return account;
+    }
+
+    public boolean setMuteAll(boolean muteAll, String operator) {
+        if (!config.adminEnabled) {
+            return false;
+        }
+        roomService.getRoom().muteAll = muteAll;
+        try {
+            if (roomStore != null) {
+                roomStore.updateMuteAll(muteAll);
+            }
+        } catch (Exception e) {
+            events.onError("保存全员禁言失败", e);
+        }
+        events.onLog((muteAll ? "[全员禁言] 开启" : "[全员禁言] 关闭")
+                + " 操作者=" + operator);
+        broadcastRoomUpdate();
+        broadcastMemberList();
+        return true;
+    }
+
     public IdentityAccount kickIdentity(String identityId,
                                         String operator) throws Exception {
         IdentityService service = identityService;
@@ -373,6 +411,7 @@ public class ChatServer implements AiReplySink {
                 room.announcement == null ? "" : room.announcement);
         data.addProperty("avatarId", roomAvatarId);
         data.addProperty("avatarVersion", roomAvatarVersion);
+        data.addProperty("muteAll", room.muteAll && config.adminEnabled);
         String line = JsonUtil.stringify(
                 Protocol.frame(Protocol.ROOM_UPDATE, null, data));
         for (ClientHandler handler : new ArrayList<>(handlers)) {
@@ -664,6 +703,7 @@ public class ChatServer implements AiReplySink {
                             account.lastSeenAt);
                     offline.username = account.username;
                     offline.admin = account.admin;
+                    offline.muted = account.muted;
                     offline.online = false;
                     members.add(offline);
                 }
@@ -747,6 +787,9 @@ public class ChatServer implements AiReplySink {
     }
 
     public void onSystemMessage(Message message) {
+        if (roomService.getRoom().muteAll) {
+            return;
+        }
         AiResponder responder = aiResponder;
         if (responder == null || !responder.isActive()) {
             return;
@@ -759,6 +802,9 @@ public class ChatServer implements AiReplySink {
     }
 
     public void onPokeAi(Member sender, Member target) {
+        if (roomService.getRoom().muteAll) {
+            return;
+        }
         AiResponder responder = aiResponder;
         if (responder == null || !responder.isActive()) {
             return;
@@ -822,6 +868,9 @@ public class ChatServer implements AiReplySink {
     }
 
     public void onChatMessage(Member sender, Message message) {
+        if (roomService.getRoom().muteAll) {
+            return;
+        }
         AiResponder responder = aiResponder;
         if (responder == null || !responder.isActive()) {
             return;
@@ -851,7 +900,7 @@ public class ChatServer implements AiReplySink {
 
     @Override
     public void appendAiMessage(String content) throws Exception {
-        if (!running) {
+        if (!running || roomService.getRoom().muteAll) {
             return;
         }
         Member aiMember = roomService.getAiMember();
@@ -869,7 +918,7 @@ public class ChatServer implements AiReplySink {
     @Override
     public void appendAiEmojiMessage(model.Attachment attachment,
                                      String content) throws Exception {
-        if (!running) {
+        if (!running || roomService.getRoom().muteAll) {
             return;
         }
         Member aiMember = roomService.getAiMember();
@@ -885,7 +934,7 @@ public class ChatServer implements AiReplySink {
 
     @Override
     public void reportFailure(String message) {
-        if (!running) {
+        if (!running || roomService.getRoom().muteAll) {
             return;
         }
         // AI 失败提示不应再次触发 AI，避免回环。
@@ -995,6 +1044,7 @@ public class ChatServer implements AiReplySink {
         json.addProperty("avatarVersion", member.avatarVersion);
         json.addProperty("ai", member.ai);
         json.addProperty("admin", member.admin);
+        json.addProperty("muted", member.muted);
         return json;
     }
 
