@@ -136,6 +136,36 @@ public class ChatServer implements AiReplySink {
         return account;
     }
 
+    /**
+     * 用户主动退出群聊：删除身份、释放用户名、移除在线成员并关闭其他同身份连接。
+     */
+    public IdentityAccount exitIdentity(String identityId,
+                                        String operator,
+                                        ClientHandler requester)
+            throws Exception {
+        IdentityService service = identityService;
+        if (service == null) {
+            return null;
+        }
+        IdentityAccount account = service.exit(identityId, operator);
+        if (account == null) {
+            return null;
+        }
+        cancelPendingForMember(identityId);
+        roomService.leave(identityId);
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (identityId.equals(handler.identityId())
+                    && handler != requester) {
+                handler.notifyExited();
+            }
+        }
+        events.onLog("[成员退出] " + memberLogLabel(account)
+                + " ID=" + identityId + " 操作者=" + operator);
+        broadcastSystemMessage(account.nickname + " 退出了群聊", false);
+        broadcastMemberList();
+        return account;
+    }
+
     public void setAiResponder(AiResponder responder) {
         if (responder != null) {
             this.aiResponder = responder;

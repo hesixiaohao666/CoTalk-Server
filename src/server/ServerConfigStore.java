@@ -251,11 +251,8 @@ public final class ServerConfigStore {
             throw new IllegalArgumentException(
                     "admin.identity.loginWindowMs 必须在 1000–86400000 之间");
         }
-        if (config.adminEnabled && (config.adminSalt.isEmpty()
-                || config.adminVerifier.isEmpty())) {
-            throw new IllegalArgumentException(
-                    "启用管理员模式前必须设置管理员密钥");
-        }
+        // v0.4.0：管理员模式默认开启，但首次启动允许尚未设置管理员密钥。
+        // 此时没有管理员身份，服务端 GUI/Headless 可先设置密钥。
         if (!config.adminSalt.isEmpty()) {
             byte[] salt;
             try {

@@ -73,6 +73,7 @@ public class ClientHandler implements Runnable {
     private BufferedWriter writer;
     private volatile boolean joined;
     private volatile boolean kicked;
+    private volatile boolean leftRoom;
     private volatile State state = State.CONNECTED;
     private byte[] nonce;
     private Member member;
@@ -200,20 +201,21 @@ public class ClientHandler implements Runnable {
         }
 
         if (state == State.AUTHENTICATED) {
-            if (config.adminEnabled) {
-                switch (type) {
-                    case Protocol.IDENTITY_ADMIN_CHALLENGE_REQ:
-                        handleIdentityAdminChallenge(reqId);
-                        return true;
-                    case Protocol.IDENTITY_LOGIN:
-                        handleIdentityLogin(data, reqId);
-                        return true;
-                    case Protocol.IDENTITY_REGISTER:
-                        handleIdentityRegister(data, reqId);
-                        return true;
-                    default:
-                        break;
-                }
+            switch (type) {
+                case Protocol.IDENTITY_ADMIN_CHALLENGE_REQ:
+                    handleIdentityAdminChallenge(reqId);
+                    return true;
+                case Protocol.IDENTITY_LOGIN:
+                    handleIdentityLogin(data, reqId);
+                    return true;
+                case Protocol.IDENTITY_REGISTER:
+                    handleIdentityRegister(data, reqId);
+                    return true;
+                case Protocol.IDENTITY_VERIFY_REQ:
+                    handleIdentityVerify(data, reqId);
+                    return true;
+                default:
+                    break;
             }
             if (Protocol.JOIN.equals(type)) {
                 handleJoin(data, reqId);
@@ -224,7 +226,7 @@ public class ClientHandler implements Runnable {
                 return true;
             }
             send(Protocol.error(Protocol.ERR_NOT_JOINED,
-                    config.adminEnabled && identityAccount == null
+                    identityAccount == null
                             ? "请先完成身份验证" : "请先 join", reqId));
             return true;
         }
@@ -233,6 +235,12 @@ public class ClientHandler implements Runnable {
             case Protocol.PING:
                 handlePing(data, reqId);
                 return true;
+            case Protocol.IDENTITY_VERIFY_REQ:
+                handleIdentityVerify(data, reqId);
+                return true;
+            case Protocol.EXIT_ROOM_REQ:
+                handleExitRoom(data, reqId);
+                return !closed.get();
             case Protocol.LEAVE:
                 return false;
             case Protocol.CHAT:
@@ -371,8 +379,8 @@ public class ClientHandler implements Runnable {
         ok.addProperty("maxClientVersionCode",
                 VersionPolicy.MAX_CLIENT_VERSION_CODE);
         ok.addProperty("aiEnabled", server.isAiActive());
-        ok.addProperty("identityRequired", config.adminEnabled);
-        ok.addProperty("identityEnabled", config.adminEnabled);
+        ok.addProperty("identityRequired", true);
+        ok.addProperty("identityEnabled", true);
         ok.addProperty("joinReviewRequired", config.adminJoinReviewEnabled);
         ok.addProperty("adminEnabled", config.adminEnabled);
         send(Protocol.frame(Protocol.HELLO_OK, reqId, ok));
@@ -545,6 +553,85 @@ public class ClientHandler implements Runnable {
         return true;
     }
 
+    private void handleIdentityVerify(JsonObject data, String reqId) {
+        if (identityAccount == null) {
+            send(Protocol.error(Protocol.ERR_IDENTITY_REQUIRED,
+                    "请先完成身份验证", reqId));
+            return;
+        }
+        String username = optString(data, "username", "").trim();
+        String password = optString(data, "password", "");
+        IdentityService service = server.getIdentityService();
+        boolean ok = service != null
+                && identityAccount.username.equals(username);
+        if (ok) {
+            try {
+                ok = service.verifyPassword(identityAccount.id, password);
+            } catch (Exception e) {
+                server.getEvents().onError("身份密码校验失败", e);
+                ok = false;
+            }
+        }
+        JsonObject response = new JsonObject();
+        response.addProperty("success", ok);
+        response.addProperty("message",
+                ok ? "校验成功" : "身份密码不正确");
+        send(Protocol.frame(Protocol.IDENTITY_VERIFY_RES, reqId, response));
+    }
+
+    private void handleExitRoom(JsonObject data, String reqId) {
+        if (identityAccount == null || !joined) {
+            send(Protocol.error(Protocol.ERR_EXIT_ROOM,
+                    "请先加入群聊", reqId));
+            return;
+        }
+        String username = optString(data, "username", "").trim();
+        String password = optString(data, "password", "");
+        IdentityService service = server.getIdentityService();
+        boolean ok = service != null
+                && identityAccount.username.equals(username);
+        if (ok) {
+            try {
+                ok = service.verifyPassword(identityAccount.id, password);
+            } catch (Exception e) {
+                server.getEvents().onError("退出群聊密码校验失败", e);
+                ok = false;
+            }
+        }
+        if (!ok) {
+            send(Protocol.error(Protocol.ERR_EXIT_ROOM,
+                    "身份密码不正确", reqId));
+            return;
+        }
+        try {
+            IdentityAccount account = server.exitIdentity(
+                    identityAccount.id, identityAccount.username, this);
+            if (account == null) {
+                send(Protocol.error(Protocol.ERR_EXIT_ROOM,
+                        "身份不存在", reqId));
+                return;
+            }
+            JsonObject response = new JsonObject();
+            response.addProperty("success", true);
+            response.addProperty("message", "已退出群聊");
+            send(Protocol.frame(Protocol.EXIT_ROOM_RES, reqId, response));
+            leftRoom = true;
+        } catch (Exception e) {
+            server.getEvents().onError("退出群聊失败", e);
+            send(Protocol.error(Protocol.ERR_EXIT_ROOM,
+                    "退出群聊失败", reqId));
+        }
+    }
+
+    public void notifyExited() {
+        leftRoom = true;
+        JsonObject data = new JsonObject();
+        data.addProperty("success", true);
+        data.addProperty("message", "您已退出群聊");
+        send(Protocol.frame(Protocol.EXIT_ROOM_RES, null, data));
+        close();
+    }
+
     public void notifyKicked() {
         kicked = true;
         JsonObject data = new JsonObject();
@@ -564,7 +651,7 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        if (config.adminEnabled && identityAccount == null) {
+        if (identityAccount == null) {
             send(Protocol.error(pendingIdentity != null
                             ? Protocol.ERR_IDENTITY_PENDING
                             : Protocol.ERR_IDENTITY_REQUIRED,
@@ -572,9 +659,7 @@ public class ClientHandler implements Runnable {
                     reqId));
             return;
         }
-        String nickname = identityAccount != null
-                ? identityAccount.nickname
-                : optString(data, "nickname", "").trim();
+        String nickname = identityAccount.nickname;
         if (nickname.isEmpty() || nickname.length() > 16) {
             send(Protocol.error(Protocol.ERR_INVALID_INPUT,
                     "昵称需为 1–16 个字符", reqId));
@@ -609,26 +694,21 @@ public class ClientHandler implements Runnable {
         }
         server.getEvents().onLog("客户端连接，IP：" + ip);
 
-        Member pending = server.claimPendingMember(tag,
-                identityAccount != null ? identityAccount.id : null);
+        Member pending = server.claimPendingMember(tag, identityAccount.id);
         boolean rejoined = pending != null;
         if (rejoined) {
             member = pending;
             member.nickname = nickname;
             member.signature = signature;
         } else {
-            member = identityAccount != null
-                    ? roomService.joinWithId(identityAccount.id,
-                    nickname, signature, ip)
-                    : roomService.join(nickname, signature, ip);
+            member = roomService.joinWithId(identityAccount.id,
+                    nickname, signature, ip);
         }
         // 同一身份/同名用户重新加入时，清理旧的宽限任务，避免幽灵成员与重名在线。
         server.cancelPendingForMember(member.id);
         server.dropPendingNickname(nickname, member.id);
-        if (identityAccount != null) {
-            member.username = identityAccount.username;
-            member.admin = identityAccount.admin;
-        }
+        member.username = identityAccount.username;
+        member.admin = identityAccount.admin;
         if (avatarData != null) {
             try {
                 member.avatarVersion = avatarService.save(member.id, avatarData);
@@ -1487,7 +1567,7 @@ public class ClientHandler implements Runnable {
                 server.getEvents().onLog("更新连接日志失败：" + e.getMessage());
             }
             server.unregister(this);
-            if (kicked) {
+            if (kicked || leftRoom) {
                 server.cancelPendingForMember(member.id);
                 roomService.leave(member.id);
             } else if (server.isMemberActive(member.id)) {

@@ -6,11 +6,10 @@ import model.Room;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 单房间在线成员与临时 UUID。
+ * 单房间在线成员，成员 ID 使用稳定身份 ID。
  */
 public class RoomService {
 
@@ -37,16 +36,6 @@ public class RoomService {
         return room;
     }
 
-    public Member join(String nickname, String signature, String ip) {
-        String id;
-        do {
-            id = "u-" + UUID.randomUUID().toString()
-                    .replace("-", "")
-                    .substring(0, 12);
-        } while (online.containsKey(id));
-        return joinWithId(id, nickname, signature, ip);
-    }
-
     /**
      * 身份模式使用稳定身份 ID，保证在线/离线成员与踢出操作一致。
      */
@@ -54,10 +43,10 @@ public class RoomService {
                              String nickname,
                              String signature,
                              String ip) {
-        String memberId = id == null || id.trim().isEmpty()
-                ? "u-" + UUID.randomUUID().toString()
-                .replace("-", "").substring(0, 12)
-                : id.trim();
+        String memberId = id == null ? "" : id.trim();
+        if (memberId.isEmpty()) {
+            throw new IllegalArgumentException("身份 ID 不能为空");
+        }
         Member member = new Member(
                 memberId,
                 nickname,

@@ -117,6 +117,30 @@ public class IdentityService {
         return new LoginResult(LOGIN_OK, account, "");
     }
 
+    /**
+     * 校验当前身份密码，供退出群聊与危险操作确认使用。
+     */
+    public boolean verifyPassword(String identityId, String password)
+            throws Exception {
+        IdentityAccount account = store.findById(identityId);
+        return account != null && verify(password, account.salt,
+                account.iterations, account.verifier);
+    }
+
+    public IdentityAccount exit(String identityId, String operator)
+            throws Exception {
+        IdentityAccount account = store.findById(identityId);
+        if (account == null) {
+            return null;
+        }
+        store.delete(account.id);
+        events.record(account.id, account.username, "exit",
+                operator, "username and password released");
+        logger.accept("[退出群聊] 用户名=" + account.username
+                + " 昵称=" + account.nickname);
+        return account;
+    }
+
     public IdentityAccount approve(String identityId,
                                    String operator) throws Exception {
         IdentityAccount account = store.findById(identityId);
