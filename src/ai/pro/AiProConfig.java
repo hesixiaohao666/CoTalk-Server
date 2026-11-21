@@ -116,6 +116,11 @@ public final class AiProConfig {
         put("ai.pro.emoji.maxConsecutive", "3");
         put("ai.pro.emoji.topCandidates", "3");
         put("ai.pro.emoji.candidatePool", "50");
+        put("ai.pro.emoji.libraryMax", "100");
+        put("ai.pro.emoji.randomCandidates", "5");
+        put("ai.pro.emoji.dailyImportMax", "20");
+        put("ai.pro.emoji.learnChance", "20");
+        put("ai.pro.emoji.autoTag", "true");
         put("ai.pro.emoji.maxBytes", "524288");
         put("ai.pro.emoji.maxGifBytes", "2097152");
         put("ai.pro.emoji.sensitiveTags", "政治,色情,暴力,广告,隐私");
@@ -317,6 +322,10 @@ public final class AiProConfig {
         requireInt("ai.pro.emoji.maxConsecutive", 1, 10);
         requireInt("ai.pro.emoji.topCandidates", 1, 50);
         requireInt("ai.pro.emoji.candidatePool", 1, 10000);
+        requireInt("ai.pro.emoji.libraryMax", 1, 10000);
+        requireInt("ai.pro.emoji.randomCandidates", 1, 50);
+        requireInt("ai.pro.emoji.dailyImportMax", 0, 10000);
+        requireInt("ai.pro.emoji.learnChance", 0, 100);
         requireInt("ai.pro.emoji.maxBytes", 1, 50 * 1024 * 1024);
         requireInt("ai.pro.emoji.maxGifBytes", 1, 100 * 1024 * 1024);
 

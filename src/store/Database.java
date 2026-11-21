@@ -14,7 +14,7 @@ import java.sql.Statement;
  */
 public class Database implements AutoCloseable {
 
-    private static final int SCHEMA_VERSION = 3300;
+    private static final int SCHEMA_VERSION = 4000;
 
     private final String path;
     private Connection connection;
@@ -47,6 +47,7 @@ public class Database implements AutoCloseable {
                     + "id INTEGER PRIMARY KEY CHECK (id = 1), "
                     + "name TEXT NOT NULL, "
                     + "announcement TEXT, "
+                    + "mute_all INTEGER NOT NULL DEFAULT 0, "
                     + "created_at INTEGER NOT NULL"
                     + ")");
 
@@ -69,6 +70,12 @@ public class Database implements AutoCloseable {
                     + "recalled INTEGER NOT NULL DEFAULT 0, "
                     + "recall_notice TEXT, "
                     + "sender_admin INTEGER NOT NULL DEFAULT 0, "
+                    + "reply_to_msg_id TEXT, "
+                    + "reply_sender_name TEXT, "
+                    + "reply_sender_username TEXT, "
+                    + "reply_preview TEXT, "
+                    + "reply_type TEXT, "
+                    + "reply_recalled INTEGER NOT NULL DEFAULT 0, "
                     + "created_at INTEGER NOT NULL"
                     + ")");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_message_seq "
@@ -133,6 +140,27 @@ public class Database implements AutoCloseable {
                     "INTEGER NOT NULL DEFAULT 0");
             // v3300：AI 上下文识别稳定身份，旧消息保持空用户名。
             addColumnIfMissing(statement, "message", "sender_username", "TEXT");
+            // v4000：回复、禁言、全员禁言、公告与 AI 表情标签。
+            addColumnIfMissing(statement, "message", "reply_to_msg_id", "TEXT");
+            addColumnIfMissing(statement, "message", "reply_sender_name", "TEXT");
+            addColumnIfMissing(statement, "message", "reply_sender_username", "TEXT");
+            addColumnIfMissing(statement, "message", "reply_preview", "TEXT");
+            addColumnIfMissing(statement, "message", "reply_type", "TEXT");
+            addColumnIfMissing(statement, "message", "reply_recalled",
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(statement, "room", "mute_all",
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(statement, "chat_identity", "muted",
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(statement, "ai_emoji", "ai_tags",
+                    "TEXT NOT NULL DEFAULT '[]'");
+            addColumnIfMissing(statement, "ai_emoji", "tag_status",
+                    "TEXT NOT NULL DEFAULT 'none'");
+            addColumnIfMissing(statement, "ai_emoji", "tag_updated_at",
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(statement, "ai_emoji", "last_used_at",
+                    "INTEGER NOT NULL DEFAULT 0");
+            createAnnouncementTables(statement);
 
             syncAiProMeta(statement);
 
@@ -239,6 +267,10 @@ public class Database implements AutoCloseable {
                 + "size INTEGER NOT NULL, "
                 + "path TEXT NOT NULL, "
                 + "tags TEXT NOT NULL DEFAULT '[]', "
+                + "ai_tags TEXT NOT NULL DEFAULT '[]', "
+                + "tag_status TEXT NOT NULL DEFAULT 'none', "
+                + "tag_updated_at INTEGER NOT NULL DEFAULT 0, "
+                + "last_used_at INTEGER NOT NULL DEFAULT 0, "
                 + "enabled INTEGER NOT NULL DEFAULT 1, "
                 + "review_status TEXT NOT NULL DEFAULT 'approved', "
                 + "source TEXT NOT NULL, "
@@ -317,6 +349,25 @@ public class Database implements AutoCloseable {
                 + "ON ai_todo_event(todo_id, created_at)");
     }
 
+    private static void createAnnouncementTables(Statement statement)
+            throws SQLException {
+        statement.execute("CREATE TABLE IF NOT EXISTS announcement ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "title TEXT NOT NULL, "
+                + "content TEXT NOT NULL, "
+                + "created_by TEXT, "
+                + "created_at INTEGER NOT NULL"
+                + ")");
+        statement.execute("CREATE TABLE IF NOT EXISTS announcement_receipt ("
+                + "identity_id TEXT NOT NULL, "
+                + "announcement_id INTEGER NOT NULL, "
+                + "delivered_at INTEGER NOT NULL, "
+                + "PRIMARY KEY(identity_id, announcement_id)"
+                + ")");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_announcement_time "
+                + "ON announcement(created_at)");
+    }
+
     private static void createIdentityTables(Statement statement)
             throws SQLException {
         statement.execute("CREATE TABLE IF NOT EXISTS chat_identity ("
@@ -328,6 +379,7 @@ public class Database implements AutoCloseable {
                 + "nickname TEXT NOT NULL, "
                 + "status TEXT NOT NULL DEFAULT 'pending', "
                 + "admin INTEGER NOT NULL DEFAULT 0, "
+                + "muted INTEGER NOT NULL DEFAULT 0, "
                 + "created_at INTEGER NOT NULL, "
                 + "updated_at INTEGER NOT NULL, "
                 + "last_login_at INTEGER NOT NULL DEFAULT 0, "

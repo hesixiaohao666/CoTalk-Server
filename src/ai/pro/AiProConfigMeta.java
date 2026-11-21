@@ -179,6 +179,16 @@ public final class AiProConfigMeta {
                 1, 50, "个", "");
         integer("emoji.candidatePool", "候选池大小", GROUP_EMOJI,
                 1, 10000, "个", "");
+        integer("emoji.libraryMax", "表情库上限", GROUP_EMOJI,
+                1, 10000, "个", "默认 100，超限淘汰最久未使用表情");
+        integer("emoji.randomCandidates", "随机候选数", GROUP_EMOJI,
+                1, 50, "个", "默认 5，仅把这些候选标签注入提示词");
+        integer("emoji.dailyImportMax", "每日新增上限", GROUP_EMOJI,
+                0, 10000, "个", "默认 20");
+        integer("emoji.learnChance", "用户表情学习概率", GROUP_EMOJI,
+                0, 100, "%", "跳过审核开启时生效，默认 20%");
+        bool("emoji.autoTag", "自动生成表情标签", GROUP_EMOJI,
+                "调用视觉模型生成表情理解标签", true);
         integer("emoji.maxBytes", "单文件上限", GROUP_EMOJI,
                 1, 50 * 1024 * 1024, "字节", "");
         integer("emoji.maxGifBytes", "GIF 上限", GROUP_EMOJI,

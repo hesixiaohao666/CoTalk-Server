@@ -35,6 +35,10 @@ public class ServerConfig {
     public final String logDir;
     public final int logRetainDays;
     public final int logMessagePreviewChars;
+    public final int syncDays;
+    public final int syncPageSize;
+    public final int announcementMaxTitle;
+    public final int announcementMaxContent;
 
     public volatile boolean adminEnabled;
     public volatile String adminSalt;
@@ -111,9 +115,15 @@ public class ServerConfig {
         logRetainDays = intValue(properties, "log.retainDays", 30);
         logMessagePreviewChars = intValue(
                 properties, "log.messagePreviewChars", 80);
+        syncDays = intValue(properties, "sync.days", 7);
+        syncPageSize = intValue(properties, "sync.pageSize", 200);
+        announcementMaxTitle = intValue(
+                properties, "announcement.maxTitle", 64);
+        announcementMaxContent = intValue(
+                properties, "announcement.maxContent", 2000);
 
         adminEnabled = Boolean.parseBoolean(
-                value(properties, "admin.enabled", "false"));
+                value(properties, "admin.enabled", "true"));
         adminSalt = value(properties, "admin.salt", "");
         adminIterations = intValue(properties, "admin.iterations", 120000);
         adminVerifier = value(properties, "admin.verifier", "");
@@ -199,8 +209,12 @@ public class ServerConfig {
         properties.setProperty("log.dir", "logs");
         properties.setProperty("log.retainDays", "30");
         properties.setProperty("log.messagePreviewChars", "80");
+        properties.setProperty("sync.days", "7");
+        properties.setProperty("sync.pageSize", "200");
+        properties.setProperty("announcement.maxTitle", "64");
+        properties.setProperty("announcement.maxContent", "2000");
 
-        properties.setProperty("admin.enabled", "false");
+        properties.setProperty("admin.enabled", "true");
         properties.setProperty("admin.salt", "");
         properties.setProperty("admin.iterations", "120000");
         properties.setProperty("admin.verifier", "");
@@ -278,6 +292,12 @@ public class ServerConfig {
                 String.valueOf(logRetainDays));
         properties.setProperty("log.messagePreviewChars",
                 String.valueOf(logMessagePreviewChars));
+        properties.setProperty("sync.days", String.valueOf(syncDays));
+        properties.setProperty("sync.pageSize", String.valueOf(syncPageSize));
+        properties.setProperty("announcement.maxTitle",
+                String.valueOf(announcementMaxTitle));
+        properties.setProperty("announcement.maxContent",
+                String.valueOf(announcementMaxContent));
 
         properties.setProperty("admin.enabled", String.valueOf(adminEnabled));
         properties.setProperty("admin.salt", adminSalt);

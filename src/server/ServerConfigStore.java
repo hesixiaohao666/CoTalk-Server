@@ -24,7 +24,7 @@ import java.util.Properties;
 public final class ServerConfigStore {
 
     public static final Path DEFAULT_PATH = Paths.get("config.properties");
-    public static final String CONFIG_VERSION = "3300";
+    public static final String CONFIG_VERSION = "4000";
 
     public static final class LoadResult {
         public final ServerConfig config;
@@ -200,6 +200,22 @@ public final class ServerConfigStore {
                 || config.logMessagePreviewChars > 1000) {
             throw new IllegalArgumentException(
                     "log.messagePreviewChars 必须在 0–1000 之间");
+        }
+        if (config.syncDays < 1 || config.syncDays > 7) {
+            throw new IllegalArgumentException("sync.days 必须在 1–7 之间");
+        }
+        if (config.syncPageSize < 1 || config.syncPageSize > 500) {
+            throw new IllegalArgumentException("sync.pageSize 必须在 1–500 之间");
+        }
+        if (config.announcementMaxTitle < 1
+                || config.announcementMaxTitle > 200) {
+            throw new IllegalArgumentException(
+                    "announcement.maxTitle 必须在 1–200 之间");
+        }
+        if (config.announcementMaxContent < 1
+                || config.announcementMaxContent > 10000) {
+            throw new IllegalArgumentException(
+                    "announcement.maxContent 必须在 1–10000 之间");
         }
         if (config.adminIterations <= 0) {
             throw new IllegalArgumentException("admin.iterations 必须大于 0");

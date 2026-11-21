@@ -7,7 +7,7 @@ import com.google.gson.JsonObject;
  */
 public final class Protocol {
 
-    public static final int VERSION = 3300;
+    public static final int VERSION = 4000;
 
     public static final String HELLO = "hello";
     public static final String AUTH_CHALLENGE = "auth_challenge";
@@ -37,6 +37,20 @@ public final class Protocol {
     public static final String ADMIN_KICK_REQ = "admin_kick_req";
     public static final String ADMIN_KICK_RES = "admin_kick_res";
     public static final String KICKED = "kicked";
+    public static final String SYNC_REQ = "sync_req";
+    public static final String SYNC_RES = "sync_res";
+    public static final String IDENTITY_VERIFY_REQ = "identity_verify_req";
+    public static final String IDENTITY_VERIFY_RES = "identity_verify_res";
+    public static final String EXIT_ROOM_REQ = "exit_room_req";
+    public static final String EXIT_ROOM_RES = "exit_room_res";
+    public static final String ADMIN_MUTE_REQ = "admin_mute_req";
+    public static final String ADMIN_MUTE_RES = "admin_mute_res";
+    public static final String ROOM_MUTE_ALL_REQ = "room_mute_all_req";
+    public static final String ROOM_MUTE_ALL_RES = "room_mute_all_res";
+    public static final String ADMIN_ANNOUNCEMENT_REQ = "admin_announcement_req";
+    public static final String ADMIN_ANNOUNCEMENT_RES = "admin_announcement_res";
+    public static final String SERVER_ANNOUNCEMENT = "server_announcement";
+    public static final String ANNOUNCEMENT_ACK = "announcement_ack";
     public static final String ADMIN_AUTH_BEGIN = "admin_auth_begin";
     public static final String ADMIN_AUTH_CHALLENGE = "admin_auth_challenge";
     public static final String ADMIN_AUTH_RESPONSE = "admin_auth_response";
@@ -90,6 +104,12 @@ public final class Protocol {
     public static final int ERR_IDENTITY_INVALID = 2035;
     public static final int ERR_KICKED = 2036;
     public static final int ERR_ADMIN_REVIEW = 2037;
+    public static final int ERR_MUTED = 2040;
+    public static final int ERR_MUTE_ALL = 2041;
+    public static final int ERR_EXIT_ROOM = 2042;
+    public static final int ERR_IDENTITY_VERIFY = 2043;
+    public static final int ERR_ANNOUNCEMENT = 2044;
+    public static final int ERR_ADMIN_SELF = 2045;
 
     public static final int ERR_AUTH_FAILED = 3001;
     public static final int ERR_CLIENT_VERSION = 3002;
