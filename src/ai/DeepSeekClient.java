@@ -47,4 +47,12 @@ public interface DeepSeekClient {
         return DeepSeekResult.from(
                 chatCompletion(messages, maxTokens, thinking));
     }
+
+    /**
+     * 空响应恢复调用：不强制 JSON，只要求模型用一句自然语言回复。
+     */
+    default DeepSeekResult chatCompletionRecovery(List<AiMessage> messages)
+            throws Exception {
+        return chatCompletionResult(messages, 200, false);
+    }
 }

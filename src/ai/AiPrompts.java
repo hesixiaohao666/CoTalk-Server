@@ -19,6 +19,14 @@ public final class AiPrompts {
             AiJsonContract.REPAIR_INSTRUCTION;
 
     /**
+     * JSON 模式连续返回空白时的最终恢复提示：改用自然语言直接回复。
+     */
+    public static final String PLAIN_RECOVERY_PROMPT =
+            "你是 CoTalk 群聊中的 AI 群友。请只用一句简短自然的中文直接回复"
+                    + "用户最后的消息，不要输出 JSON、Markdown、推理或解释。"
+                    + "遵守法律法规和公序良俗，不冒充人类。";
+
+    /**
      * 上下文身份与引用规则，供基础/Pro 提示词共用。
      */
     public static final String CONTEXT_RULES =

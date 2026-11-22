@@ -40,6 +40,8 @@ public class AiProResponder extends DeepSeekAiResponder {
     private final MessageService messageService;
     private static final Pattern EMOJI_TOKEN = Pattern.compile(
             "\\[\\[emoji:([A-Za-z0-9_-]+)]]");
+    private static final String MANDATORY_FALLBACK =
+            "我在，刚才没组织好回复，你再说一次？";
 
     public AiProResponder(ServerConfig config,
                           DeepSeekClient client,
@@ -408,6 +410,19 @@ public class AiProResponder extends DeepSeekAiResponder {
 
     public AiEmojiService getEmojiService() {
         return emojiService;
+    }
+
+    /**
+     * @/拍一拍等强制回复场景不再静默：普通恢复也失败时发送一条兜底回复。
+     */
+    @Override
+    protected void handleMandatoryFailure(String detail) {
+        sink.reportError(detail + "，发送兜底回复");
+        try {
+            sink.appendAiMessage(MANDATORY_FALLBACK);
+        } catch (Exception e) {
+            sink.reportError("AI 兜底回复发送失败：" + e.getMessage());
+        }
     }
 
     @Override

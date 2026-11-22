@@ -68,6 +68,19 @@ public class DeepSeekHttpClient implements DeepSeekClient {
                                                int maxTokens,
                                                boolean thinkingEnabled)
             throws Exception {
+        return request(messages, maxTokens, thinkingEnabled, true);
+    }
+
+    @Override
+    public DeepSeekResult chatCompletionRecovery(List<AiMessage> messages)
+            throws Exception {
+        return request(messages, 200, false, false);
+    }
+
+    private DeepSeekResult request(List<AiMessage> messages,
+                                   int maxTokens,
+                                   boolean thinkingEnabled,
+                                   boolean jsonMode) throws Exception {
         JsonObject body = new JsonObject();
         body.addProperty("model", effectiveModel());
         body.addProperty("stream", false);
@@ -79,9 +92,11 @@ public class DeepSeekHttpClient implements DeepSeekClient {
                 thinkingEnabled ? "enabled" : "disabled");
         body.add("thinking", thinking);
 
-        JsonObject responseFormat = new JsonObject();
-        responseFormat.addProperty("type", "json_object");
-        body.add("response_format", responseFormat);
+        if (jsonMode) {
+            JsonObject responseFormat = new JsonObject();
+            responseFormat.addProperty("type", "json_object");
+            body.add("response_format", responseFormat);
+        }
 
         JsonArray array = new JsonArray();
         for (AiMessage message : messages) {

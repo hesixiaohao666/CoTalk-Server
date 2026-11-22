@@ -258,6 +258,10 @@ public class DeepSeekAiResponder implements AiResponder {
                         result = retryCall(activeRequest, result);
                         if (result.isEmptyContent()) {
                             logEmpty("回退", result);
+                            if (mandatory && recoverPlainReply(
+                                    mergedMessages)) {
+                                return;
+                            }
                             if (mandatory) {
                                 handleMandatoryFailure(
                                         "AI 空响应回退后仍为空");
@@ -265,6 +269,10 @@ public class DeepSeekAiResponder implements AiResponder {
                             return;
                         }
                     } else {
+                        if (mandatory && recoverPlainReply(
+                                mergedMessages)) {
+                            return;
+                        }
                         if (mandatory) {
                             handleMandatoryFailure("AI 空响应重试后仍为空");
                         }
@@ -325,6 +333,57 @@ public class DeepSeekAiResponder implements AiResponder {
             }
         } finally {
             finishRequest();
+        }
+    }
+
+    /**
+     * JSON 模式连续空白时的最后恢复：改为自然语言请求并发送。
+     * 只对 @/拍一拍等强制回复场景调用，避免普通插话产生意外回复。
+     */
+    private boolean recoverPlainReply(List<String> mergedMessages) {
+        if (mergedMessages == null || mergedMessages.isEmpty()) {
+            return false;
+        }
+        StringBuilder text = new StringBuilder();
+        for (String message : mergedMessages) {
+            if (message == null || message.trim().isEmpty()) {
+                continue;
+            }
+            String value = message.trim();
+            if (value.length() > 1000) {
+                value = value.substring(0, 1000) + "…";
+            }
+            text.append(value).append('\n');
+        }
+        if (text.length() == 0) {
+            return false;
+        }
+        List<AiMessage> request = new ArrayList<>();
+        request.add(new AiMessage("system", AiPrompts.PLAIN_RECOVERY_PROMPT));
+        request.add(new AiMessage("user", text.toString().trim()));
+        boolean sent = false;
+        try {
+            DeepSeekResult result = client.chatCompletionRecovery(request);
+            if (result == null || result.isEmptyContent()) {
+                logEmpty("普通回复恢复", result == null
+                        ? DeepSeekResult.from("") : result);
+                return false;
+            }
+            AiReplyParser.ParsedReply reply =
+                    replyParser.parse(result.content);
+            if (reply == null || !reply.send || reply.actions.isEmpty()) {
+                return false;
+            }
+            for (AiReplyAction action : reply.actions) {
+                sendAction(action);
+                sent = true;
+            }
+            return true;
+        } catch (Exception e) {
+            if (!sent) {
+                sink.reportError("AI 空响应普通回复恢复失败：" + e.getMessage());
+            }
+            return sent;
         }
     }
 
