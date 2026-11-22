@@ -258,6 +258,12 @@ public class ClientHandler implements Runnable {
             case Protocol.ROOM_MUTE_ALL_REQ:
                 handleRoomMuteAll(data, reqId);
                 return true;
+            case Protocol.ADMIN_ANNOUNCEMENT_REQ:
+                handleAdminAnnouncement(data, reqId);
+                return true;
+            case Protocol.ANNOUNCEMENT_ACK:
+                handleAnnouncementAck(data);
+                return true;
             case Protocol.LEAVE:
                 return false;
             case Protocol.CHAT:
@@ -775,6 +781,7 @@ public class ClientHandler implements Runnable {
         if (!rejoined) {
             server.broadcastSystemMessage(nickname + " 加入了群聊");
         }
+        server.sendPendingAnnouncement(this, identityAccount.id);
         server.notifyMembersChanged();
 
         server.getEvents().onLog("[" + (rejoined ? "成员重连" : "成员加入")
@@ -1498,6 +1505,54 @@ public class ClientHandler implements Runnable {
         response.addProperty("success", true);
         response.addProperty("muteAll", muteAll);
         send(Protocol.frame(Protocol.ROOM_MUTE_ALL_RES, reqId, response));
+    }
+
+    private void handleAdminAnnouncement(JsonObject data, String reqId) {
+        if (!adminAllowed(reqId)) {
+            return;
+        }
+        String title = optString(data, "title", "").trim();
+        String content = optString(data, "content", "").trim();
+        if (title.isEmpty()
+                || title.length() > config.announcementMaxTitle) {
+            send(Protocol.error(Protocol.ERR_ANNOUNCEMENT,
+                    "公告标题需为 1–" + config.announcementMaxTitle
+                            + " 个字符", reqId));
+            return;
+        }
+        if (content.isEmpty()
+                || content.length() > config.announcementMaxContent) {
+            send(Protocol.error(Protocol.ERR_ANNOUNCEMENT,
+                    "公告正文需为 1–" + config.announcementMaxContent
+                            + " 个字符", reqId));
+            return;
+        }
+        try {
+            model.Announcement announcement = server.publishAnnouncement(
+                    title, content, member.nickname);
+            JsonObject response = new JsonObject();
+            response.addProperty("success", true);
+            response.addProperty("message", "公告已发布");
+            response.addProperty("id", announcement.id);
+            send(Protocol.frame(
+                    Protocol.ADMIN_ANNOUNCEMENT_RES, reqId, response));
+        } catch (Exception e) {
+            server.getEvents().onError("发布公告失败", e);
+            send(Protocol.error(Protocol.ERR_ANNOUNCEMENT,
+                    "发布公告失败", reqId));
+        }
+    }
+
+    private void handleAnnouncementAck(JsonObject data) {
+        if (identityAccount == null) {
+            return;
+        }
+        long id = data.has("id") && data.get("id").isJsonPrimitive()
+                ? data.get("id").getAsLong() : 0L;
+        if (id <= 0) {
+            return;
+        }
+        server.ackAnnouncement(identityAccount.id, id);
     }
 
     private void handleFileRequest(JsonObject data, String reqId) {

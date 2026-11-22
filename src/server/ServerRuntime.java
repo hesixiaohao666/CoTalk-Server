@@ -5,9 +5,11 @@ import ai.AiImageResolver;
 import ai.AiResponder;
 import ai.AiResponderFactory;
 import ai.pro.CoreMemoryStore;
+import model.Announcement;
 import model.Member;
 import model.Room;
 import protocol.Protocol;
+import store.AnnouncementStore;
 import store.AttachmentStore;
 import store.AvatarStore;
 import store.ConnectionLogStore;
@@ -102,6 +104,8 @@ public final class ServerRuntime {
                     database, config, events::onLog);
             chatServer.setIdentityService(identityService);
             chatServer.setRoomStore(roomStore);
+            chatServer.setAnnouncementStore(
+                    new AnnouncementStore(database));
             chatServer.setConfigPath(configPath);
 
             Member aiMember = AiMemberService.prepare(
@@ -340,6 +344,29 @@ public final class ServerRuntime {
             chatServer.broadcastSystemMessage(text);
             chatServer.broadcastSystem(text);
         }
+    }
+
+    public Announcement publishAnnouncement(String title,
+                                            String content,
+                                            String operator)
+            throws Exception {
+        if (chatServer == null || !chatServer.isRunning()) {
+            throw new IllegalStateException("服务未启动");
+        }
+        String valueTitle = title == null ? "" : title.trim();
+        String valueContent = content == null ? "" : content.trim();
+        if (valueTitle.isEmpty()
+                || valueTitle.length() > config.announcementMaxTitle) {
+            throw new IllegalArgumentException("公告标题需为 1–"
+                    + config.announcementMaxTitle + " 个字符");
+        }
+        if (valueContent.isEmpty()
+                || valueContent.length() > config.announcementMaxContent) {
+            throw new IllegalArgumentException("公告正文需为 1–"
+                    + config.announcementMaxContent + " 个字符");
+        }
+        return chatServer.publishAnnouncement(
+                valueTitle, valueContent, operator);
     }
 
     public MessageService.RecallResult forceRecall(long seq) {

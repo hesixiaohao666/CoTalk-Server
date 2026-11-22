@@ -5,11 +5,13 @@ import ai.AiResponder;
 import ai.NoopAiResponder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import model.Announcement;
 import model.IdentityAccount;
 import model.Member;
 import model.Message;
 import model.Room;
 import protocol.Protocol;
+import store.AnnouncementStore;
 import store.ConnectionLogStore;
 import store.RoomStore;
 import util.JsonUtil;
@@ -60,6 +62,7 @@ public class ChatServer implements AiReplySink {
     private volatile String roomAvatarId = "";
     private volatile int roomAvatarVersion;
     private volatile RoomStore roomStore;
+    private volatile AnnouncementStore announcementStore;
     private volatile Path configPath = ServerConfigStore.DEFAULT_PATH;
 
     private final Set<ClientHandler> handlers = ConcurrentHashMap.newKeySet();
@@ -222,6 +225,86 @@ public class ChatServer implements AiReplySink {
 
     public void setRoomStore(RoomStore roomStore) {
         this.roomStore = roomStore;
+    }
+
+    public void setAnnouncementStore(AnnouncementStore announcementStore) {
+        this.announcementStore = announcementStore;
+    }
+
+    /**
+     * 发布公告：持久化最新公告并立即推送给所有在线成员。
+     */
+    public Announcement publishAnnouncement(String title,
+                                            String content,
+                                            String operator)
+            throws Exception {
+        AnnouncementStore store = announcementStore;
+        if (store == null) {
+            throw new IllegalStateException("公告服务未初始化");
+        }
+        Announcement announcement = store.insert(
+                title, content, operator, System.currentTimeMillis());
+        broadcastAnnouncement(announcement);
+        events.onLog("[公告] 发布 #" + announcement.id
+                + " 操作者=" + operator
+                + " 标题=" + ServerLogService.preview(title,
+                config.logMessagePreviewChars));
+        return announcement;
+    }
+
+    public void sendPendingAnnouncement(ClientHandler handler,
+                                        String identityId) {
+        if (handler == null || identityId == null || identityId.isEmpty()) {
+            return;
+        }
+        AnnouncementStore store = announcementStore;
+        if (store == null) {
+            return;
+        }
+        try {
+            Announcement announcement = store.latest();
+            if (announcement == null
+                    || store.hasReceipt(identityId, announcement.id)) {
+                return;
+            }
+            handler.send(announcementFrame(announcement));
+        } catch (Exception e) {
+            events.onLog("读取公告失败：" + e.getMessage());
+        }
+    }
+
+    public void ackAnnouncement(String identityId, long announcementId) {
+        AnnouncementStore store = announcementStore;
+        if (store == null) {
+            return;
+        }
+        try {
+            store.markReceipt(identityId, announcementId,
+                    System.currentTimeMillis());
+        } catch (Exception e) {
+            events.onLog("记录公告回执失败：" + e.getMessage());
+        }
+    }
+
+    private void broadcastAnnouncement(Announcement announcement) {
+        if (!running || announcement == null) {
+            return;
+        }
+        String line = JsonUtil.stringify(announcementFrame(announcement));
+        for (ClientHandler handler : new ArrayList<>(handlers)) {
+            if (handler.isJoined()) {
+                handler.sendLine(line);
+            }
+        }
+    }
+
+    private static JsonObject announcementFrame(Announcement announcement) {
+        JsonObject data = new JsonObject();
+        data.addProperty("id", announcement.id);
+        data.addProperty("title", announcement.title);
+        data.addProperty("content", announcement.content);
+        data.addProperty("createdAt", announcement.createdAt);
+        return Protocol.frame(Protocol.SERVER_ANNOUNCEMENT, null, data);
     }
 
     public void setConfigPath(Path configPath) {

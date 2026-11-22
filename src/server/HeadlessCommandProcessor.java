@@ -75,6 +75,9 @@ public final class HeadlessCommandProcessor {
             case "broadcast":
                 broadcast(rest);
                 return true;
+            case "announcement":
+                announcement(rest);
+                return true;
             case "recall":
                 recall(rest);
                 return true;
@@ -157,6 +160,7 @@ public final class HeadlessCommandProcessor {
         log("  status                 查看运行状态");
         log("  members                查看在线成员");
         log("  broadcast <text>       向房间广播系统消息");
+        log("  announcement <标题> | <正文>  发布公告");
         log("  recall <seq>           强制撤回指定消息");
         log("  muteall on|off         开启/关闭全员禁言");
         log("  stop | quit | exit     停止服务并退出");
@@ -255,6 +259,28 @@ public final class HeadlessCommandProcessor {
         }
         runtime.broadcast(text);
         log("广播：" + text);
+    }
+
+    private void announcement(String value) {
+        String text = value == null ? "" : value;
+        int separator = text.indexOf('|');
+        if (separator < 0) {
+            log("用法：announcement <标题> | <正文>");
+            return;
+        }
+        String title = text.substring(0, separator).trim();
+        String content = text.substring(separator + 1).trim();
+        if (title.isEmpty() || content.isEmpty()) {
+            log("用法：announcement <标题> | <正文>");
+            return;
+        }
+        try {
+            model.Announcement announcement = runtime.publishAnnouncement(
+                    title, content, OPERATOR);
+            log("已发布公告 #" + announcement.id + "：" + title);
+        } catch (Exception e) {
+            log("发布公告失败：" + e.getMessage());
+        }
     }
 
     private void muteAll(String value) {
@@ -960,7 +986,8 @@ public final class HeadlessCommandProcessor {
 
     private void unknownRoot(String root) {
         String suggestion = suggest(root,
-                "help", "status", "members", "broadcast", "recall",
+                "help", "status", "members", "broadcast", "announcement",
+                "recall",
                 "muteall",
                 "config", "aipro", "ai", "stop");
         log("未知命令：" + root

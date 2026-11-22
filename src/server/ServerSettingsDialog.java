@@ -376,6 +376,11 @@ public class ServerSettingsDialog extends JDialog {
                     muteAll.isSelected(), "server-gui"));
             addRow(panel, row++, "全员禁言", muteAll,
                     "开启后普通用户与 AI 均静默，系统消息正常");
+
+            JButton announcement = new JButton("发布公告");
+            announcement.addActionListener(e -> openAnnouncementDialog());
+            addRow(panel, row++, "公告推送", announcement,
+                    "在线成员立即收到，离线成员下次连接补发");
         }
 
         addNote(panel, row++,
@@ -394,6 +399,56 @@ public class ServerSettingsDialog extends JDialog {
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.add(scroll, BorderLayout.CENTER);
         return wrapper;
+    }
+
+    private void openAnnouncementDialog() {
+        if (runtime == null || !runtime.isRunning()) {
+            JOptionPane.showMessageDialog(this,
+                    "请先启动服务再发布公告。",
+                    "发布公告", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        JDialog dialog = new JDialog(this, "发布公告", true);
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        panel.setBorder(new EmptyBorder(12, 12, 12, 12));
+
+        JTextField title = new JTextField(32);
+        JTextArea content = new JTextArea(10, 40);
+        content.setLineWrap(true);
+        content.setWrapStyleWord(true);
+
+        JPanel fields = new JPanel(new BorderLayout(0, 8));
+        fields.add(title, BorderLayout.NORTH);
+        fields.add(new JScrollPane(content), BorderLayout.CENTER);
+        fields.add(new JLabel("标题 1–" + runtime.getConfig().announcementMaxTitle
+                + " 字符，正文 1–"
+                + runtime.getConfig().announcementMaxContent + " 字符"),
+                BorderLayout.SOUTH);
+        panel.add(fields, BorderLayout.CENTER);
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton cancel = new JButton("取消");
+        JButton publish = new JButton("发布");
+        cancel.addActionListener(e -> dialog.dispose());
+        publish.addActionListener(e -> {
+            try {
+                runtime.publishAnnouncement(
+                        title.getText(), content.getText(), "server-gui");
+                dialog.dispose();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(dialog,
+                        ex.getMessage(), "发布公告",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        buttons.add(cancel);
+        buttons.add(publish);
+        panel.add(buttons, BorderLayout.SOUTH);
+
+        dialog.setContentPane(panel);
+        dialog.setSize(520, 420);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 
     private JPanel buildAboutPanel() {
