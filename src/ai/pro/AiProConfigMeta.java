@@ -173,10 +173,6 @@ public final class AiProConfigMeta {
                 0, 10000, "轮", "兼容配置；v0.3.7 起不再限制发送轮数");
         integer("emoji.maxConsecutive", "单次最多连续表情", GROUP_EMOJI,
                 1, 3, "个", "最多 3 个，超出忽略");
-        integer("emoji.topCandidates", "候选表情数", GROUP_EMOJI,
-                1, 50, "个", "");
-        integer("emoji.candidatePool", "候选池大小", GROUP_EMOJI,
-                1, 10000, "个", "");
         integer("emoji.libraryMax", "表情库上限", GROUP_EMOJI,
                 1, 10000, "个", "默认 100，超限淘汰最久未使用表情");
         integer("emoji.randomCandidates", "随机候选数", GROUP_EMOJI,

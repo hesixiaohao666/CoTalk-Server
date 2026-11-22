@@ -94,7 +94,8 @@ public class AiProResponder extends DeepSeekAiResponder {
                     AiEmojiStore emojiStore = new AiEmojiStore(
                             database, Paths.get("data", "ai-pro", "emoji"));
                     emojis = new AiEmojiService(
-                            emojiStore, attachmentService, config.aiPro, sink);
+                            emojiStore, attachmentService, config, client,
+                            sink);
                 } catch (Exception e) {
                     sink.reportError("AI 表情库初始化失败：" + e.getMessage());
                 }
@@ -405,6 +406,10 @@ public class AiProResponder extends DeepSeekAiResponder {
                 ? "未启用" : emotionEngine.statusText();
     }
 
+    public AiEmojiService getEmojiService() {
+        return emojiService;
+    }
+
     @Override
     public void shutdown() {
         if (pipeline != null) {
@@ -412,6 +417,9 @@ public class AiProResponder extends DeepSeekAiResponder {
         }
         if (todoService != null) {
             todoService.shutdown();
+        }
+        if (emojiService != null) {
+            emojiService.shutdown();
         }
         super.shutdown();
     }

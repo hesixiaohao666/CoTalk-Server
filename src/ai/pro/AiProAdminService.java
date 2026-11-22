@@ -26,6 +26,7 @@ public class AiProAdminService {
     private final Consumer<String> logger;
     private volatile Runnable indexRebuilder;
     private volatile Runnable emotionResetter;
+    private volatile AiEmojiService emojiService;
 
     public AiProAdminService(Database database,
                              ServerConfig config,
@@ -41,6 +42,10 @@ public class AiProAdminService {
                 database, Paths.get("data", "ai-pro", "emoji"));
         this.emotionStore = new EmotionStore(database);
         this.logger = logger == null ? message -> { } : logger;
+    }
+
+    public void setEmojiService(AiEmojiService emojiService) {
+        this.emojiService = emojiService;
     }
 
     public void setIndexRebuilder(Runnable indexRebuilder) {
@@ -272,6 +277,11 @@ public class AiProAdminService {
                                String operator) throws Exception {
         AiEmoji emoji = emojiStore.importFile(
                 path, name, tags, "admin", operator);
+        if (emojiService != null) {
+            emojiService.scheduleTag(emoji, false);
+        }
+        emojiStore.enforceLibraryLimit(
+                config.aiPro.getInt("ai.pro.emoji.libraryMax"));
         logger.accept("导入表情 " + emoji.emojiId);
         return emoji;
     }
@@ -291,9 +301,26 @@ public class AiProAdminService {
                             String operator) throws Exception {
         emojiStore.setReviewStatus(emojiId,
                 approved ? "approved" : "rejected", approved);
+        if (approved && emojiService != null) {
+            AiEmoji emoji = emojiStore.findByEmojiId(emojiId);
+            if (emoji != null) {
+                emojiService.scheduleTag(emoji, false);
+            }
+        }
         memoryStore.insertAudit(null, "admin_edit", null, null,
                 null, null, operator,
                 (approved ? "approve emoji " : "reject emoji ") + emojiId,
+                System.currentTimeMillis());
+    }
+
+    public void retryEmojiTag(String emojiId, String operator)
+            throws Exception {
+        if (emojiService == null) {
+            throw new IllegalStateException("AI 表情服务未初始化");
+        }
+        emojiService.retryTag(emojiId);
+        memoryStore.insertAudit(null, "admin_edit", null, null,
+                null, null, operator, "retry emoji tag " + emojiId,
                 System.currentTimeMillis());
     }
 

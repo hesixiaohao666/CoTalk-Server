@@ -76,7 +76,8 @@ public class AiProSettingsPanel extends JPanel {
         todoTable.setRowHeight(24);
 
         emojiModel = new DefaultTableModel(
-                new Object[]{"ID", "名称", "标签", "审核", "启用"}, 0) {
+                new Object[]{"ID", "名称", "手工标签", "AI 标签", "标签状态",
+                        "审核", "启用"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -159,6 +160,7 @@ public class AiProSettingsPanel extends JPanel {
         JButton reject = new JButton("拒绝");
         JButton toggle = new JButton("启用/禁用");
         JButton tags = new JButton("标签");
+        JButton retryTag = new JButton("重试标签");
         JButton delete = new JButton("删除");
         refresh.addActionListener(e -> refreshEmojis());
         importButton.addActionListener(e -> importEmoji());
@@ -166,6 +168,7 @@ public class AiProSettingsPanel extends JPanel {
         reject.addActionListener(e -> reviewEmoji(false));
         toggle.addActionListener(e -> toggleEmoji());
         tags.addActionListener(e -> editEmojiTags());
+        retryTag.addActionListener(e -> retryEmojiTag());
         delete.addActionListener(e -> deleteEmoji());
         top.add(refresh);
         top.add(importButton);
@@ -173,6 +176,7 @@ public class AiProSettingsPanel extends JPanel {
         top.add(reject);
         top.add(toggle);
         top.add(tags);
+        top.add(retryTag);
         top.add(delete);
         panel.add(top, BorderLayout.NORTH);
         panel.add(new JScrollPane(emojiTable), BorderLayout.CENTER);
@@ -437,6 +441,8 @@ public class AiProSettingsPanel extends JPanel {
                         emoji.emojiId,
                         emoji.name,
                         emoji.tags,
+                        emoji.aiTags,
+                        emoji.tagStatus,
                         reviewLabel(emoji.reviewStatus),
                         emoji.enabled ? "是" : "否"
                 });
@@ -494,7 +500,7 @@ public class AiProSettingsPanel extends JPanel {
             return;
         }
         AiEmoji emoji = emojis.get(row);
-        String tags = JOptionPane.showInputDialog(owner, "标签 JSON",
+        String tags = JOptionPane.showInputDialog(owner, "手工标签 JSON",
                 emoji.tags);
         if (tags == null) {
             return;
@@ -504,6 +510,20 @@ public class AiProSettingsPanel extends JPanel {
             refreshAll();
         } catch (Exception e) {
             error("更新标签失败", e);
+        }
+    }
+
+    private void retryEmojiTag() {
+        int row = emojiTable.getSelectedRow();
+        if (row < 0 || emojis == null || row >= emojis.size()) {
+            return;
+        }
+        AiEmoji emoji = emojis.get(row);
+        try {
+            admin.retryEmojiTag(emoji.emojiId, "admin-gui");
+            refreshAll();
+        } catch (Exception e) {
+            error("重试标签失败", e);
         }
     }
 

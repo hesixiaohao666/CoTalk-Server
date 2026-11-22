@@ -11,6 +11,10 @@ public class AiEmoji {
     public long size;
     public String path = "";
     public String tags = "[]";
+    public String aiTags = "[]";
+    public String tagStatus = "none";
+    public long tagUpdatedAt;
+    public long lastUsedAt;
     public boolean enabled = true;
     public String reviewStatus = "approved";
     public String source = "admin";

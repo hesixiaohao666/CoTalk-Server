@@ -185,6 +185,8 @@ public final class HeadlessCommandProcessor {
         log("  ai memory delete <id>");
         log("  ai emojis [limit]");
         log("  ai emoji approve|reject <id>");
+        log("  ai emoji tag <id>             重新生成 AI 标签");
+        log("  ai emoji tags <id> <JSON>     修改手工标签");
         log("  ai clear cache|all");
         log("  ai export <path>");
         log("  ai import <path>");
@@ -578,7 +580,7 @@ public final class HeadlessCommandProcessor {
                         "clear", "export", "import", "todos", "todo",
                         "emotion", "search");
                 log("未知 AI 命令：" + sub
-                        + (suggestion == null ? "" : "，是否想输入 aipro "
+                        + (suggestion == null ? "" : "，是否想输入 ai "
                         + suggestion));
         }
     }
@@ -595,7 +597,7 @@ public final class HeadlessCommandProcessor {
         } else if ("cache".equalsIgnoreCase(layerValue)) {
             layer = MemoryLayer.CACHE;
         } else {
-            log("用法：aipro memories [deep|shallow|cache|all] [limit]");
+            log("用法：ai memories [deep|shallow|cache|all] [limit]");
             return;
         }
         int limit = 20;
@@ -622,7 +624,7 @@ public final class HeadlessCommandProcessor {
         switch (action) {
             case "search":
                 if (value.isEmpty()) {
-                    log("用法：aipro memory search <text>");
+                    log("用法：ai memory search <text>");
                     return;
                 }
                 try {
@@ -635,7 +637,7 @@ public final class HeadlessCommandProcessor {
             case "archive":
             case "restore":
                 if (value.isEmpty()) {
-                    log("用法：aipro memory " + action + " <id>");
+                    log("用法：ai memory " + action + " <id>");
                     return;
                 }
                 try {
@@ -650,7 +652,7 @@ public final class HeadlessCommandProcessor {
                 return;
             case "delete":
                 if (value.isEmpty()) {
-                    log("用法：aipro memory delete <id>");
+                    log("用法：ai memory delete <id>");
                     return;
                 }
                 schedule(() -> {
@@ -659,7 +661,7 @@ public final class HeadlessCommandProcessor {
                 }, "删除记忆 " + value);
                 return;
             default:
-                log("用法：aipro memory search|archive|restore|delete <...>");
+                log("用法：ai memory search|archive|restore|delete <...>");
         }
     }
 
@@ -683,7 +685,9 @@ public final class HeadlessCommandProcessor {
             for (ai.pro.AiEmoji emoji : emojis) {
                 log(emoji.emojiId + " [" + emoji.reviewStatus + "] "
                         + (emoji.enabled ? "启用" : "停用") + " "
-                        + emoji.name);
+                        + emoji.name + " | AI标签=" + emoji.aiTags
+                        + " (" + emoji.tagStatus + ")"
+                        + " | 手工=" + emoji.tags);
             }
         } catch (Exception e) {
             log("读取表情失败：" + e.getMessage());
@@ -693,25 +697,51 @@ public final class HeadlessCommandProcessor {
     private void emojiReview(AiProAdminService admin, String[] parts) {
         String action = parts.length > 1
                 ? parts[1].toLowerCase(Locale.ROOT) : "";
-        String id = parts.length > 2 ? parts[2].trim() : "";
-        if (!"approve".equals(action) && !"reject".equals(action)
-                || id.isEmpty()) {
-            log("用法：aipro emoji approve|reject <id>");
+        String argument = parts.length > 2 ? parts[2].trim() : "";
+        if (("approve".equals(action) || "reject".equals(action))
+                && !argument.isEmpty()) {
+            try {
+                admin.reviewEmoji(argument, "approve".equals(action), OPERATOR);
+                log("表情已" + ("approve".equals(action) ? "通过" : "拒绝")
+                        + "：" + argument);
+            } catch (Exception e) {
+                log("审核表情失败：" + e.getMessage());
+            }
             return;
         }
-        try {
-            admin.reviewEmoji(id, "approve".equals(action), OPERATOR);
-            log("表情已" + ("approve".equals(action) ? "通过" : "拒绝")
-                    + "：" + id);
-        } catch (Exception e) {
-            log("审核表情失败：" + e.getMessage());
+        if ("tag".equals(action) && !argument.isEmpty()) {
+            try {
+                admin.retryEmojiTag(argument, OPERATOR);
+                log("已提交表情标签生成：" + argument);
+            } catch (Exception e) {
+                log("重试标签失败：" + e.getMessage());
+            }
+            return;
         }
+        if ("tags".equals(action) && !argument.isEmpty()) {
+            int space = argument.indexOf(' ');
+            String id = space < 0 ? argument : argument.substring(0, space);
+            String json = space < 0 ? "" : argument.substring(space + 1).trim();
+            if (json.isEmpty()) {
+                log("用法：ai emoji tags <id> <JSON 数组>");
+                return;
+            }
+            try {
+                admin.updateEmojiTags(id, json, OPERATOR);
+                log("已更新手工作签：" + id);
+            } catch (Exception e) {
+                log("更新手工作签失败：" + e.getMessage());
+            }
+            return;
+        }
+        log("用法：ai emoji approve|reject <id> | "
+                + "ai emoji tag <id> | ai emoji tags <id> <JSON>");
     }
 
     private void clear(String target) {
         if (!"cache".equalsIgnoreCase(target)
                 && !"all".equalsIgnoreCase(target)) {
-            log("用法：aipro clear cache|all");
+            log("用法：ai clear cache|all");
             return;
         }
         String normalized = target.toLowerCase(Locale.ROOT);
@@ -738,7 +768,7 @@ public final class HeadlessCommandProcessor {
         String path = value.length() <= "export".length()
                 ? "" : value.substring("export".length()).trim();
         if (path.isEmpty()) {
-            log("用法：aipro export <path>");
+            log("用法：ai export <path>");
             return;
         }
         try {
@@ -755,7 +785,7 @@ public final class HeadlessCommandProcessor {
         String path = value.length() <= "import".length()
                 ? "" : value.substring("import".length()).trim();
         if (path.isEmpty()) {
-            log("用法：aipro import <path>");
+            log("用法：ai import <path>");
             return;
         }
         try {
@@ -791,13 +821,13 @@ public final class HeadlessCommandProcessor {
         String[] todoParts = remainder.split("\\s+", 2);
         String id = todoParts.length > 0 ? todoParts[0] : "";
         if (id.isEmpty()) {
-            log("用法：aipro todo done|cancel <id>");
+            log("用法：ai todo done|cancel <id>");
             return;
         }
         long deferTo = 0L;
         if ("defer".equals(action)) {
             if (todoParts.length < 2) {
-                log("用法：aipro todo defer <id> <timestamp>");
+                log("用法：ai todo defer <id> <timestamp>");
                 return;
             }
             try {
@@ -811,7 +841,7 @@ public final class HeadlessCommandProcessor {
                 return;
             }
         } else if (!"done".equals(action) && !"cancel".equals(action)) {
-            log("用法：aipro todo done|cancel|defer <id> [timestamp]");
+            log("用法：ai todo done|cancel|defer <id> [timestamp]");
             return;
         }
         try {
@@ -831,7 +861,7 @@ public final class HeadlessCommandProcessor {
                     || "status".equalsIgnoreCase(value)) {
                 log("AI 情绪：" + admin.emotionText());
             } else {
-                log("用法：aipro emotion [reset]");
+                log("用法：ai emotion [reset]");
             }
         } catch (Exception e) {
             log("读取情绪失败：" + e.getMessage());
@@ -869,7 +899,7 @@ public final class HeadlessCommandProcessor {
             }
             return;
         }
-        log("用法：aipro search status|reset");
+        log("用法：ai search status|reset");
     }
 
     private void schedule(PendingAction action, String description) {

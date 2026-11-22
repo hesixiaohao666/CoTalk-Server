@@ -131,10 +131,11 @@ public class AiEmojiStore {
             try (PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO ai_emoji("
                             + "emoji_id, name, file_name, mime, size, path, "
-                            + "tags, enabled, review_status, source, "
+                            + "tags, ai_tags, tag_status, tag_updated_at, "
+                            + "last_used_at, enabled, review_status, source, "
                             + "source_user_id, content_hash, created_at, "
                             + "updated_at"
-                            + ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                            + ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
                 statement.setString(1, emoji.emojiId);
                 statement.setString(2, emoji.name);
                 statement.setString(3, emoji.fileName);
@@ -142,13 +143,17 @@ public class AiEmojiStore {
                 statement.setLong(5, emoji.size);
                 statement.setString(6, emoji.path);
                 statement.setString(7, emoji.tags);
-                statement.setInt(8, emoji.enabled ? 1 : 0);
-                statement.setString(9, emoji.reviewStatus);
-                statement.setString(10, emoji.source);
-                statement.setString(11, emoji.sourceUserId);
-                statement.setString(12, emoji.contentHash);
-                statement.setLong(13, emoji.createdAt);
-                statement.setLong(14, emoji.updatedAt);
+                statement.setString(8, emoji.aiTags);
+                statement.setString(9, emoji.tagStatus);
+                statement.setLong(10, emoji.tagUpdatedAt);
+                statement.setLong(11, emoji.lastUsedAt);
+                statement.setInt(12, emoji.enabled ? 1 : 0);
+                statement.setString(13, emoji.reviewStatus);
+                statement.setString(14, emoji.source);
+                statement.setString(15, emoji.sourceUserId);
+                statement.setString(16, emoji.contentHash);
+                statement.setLong(17, emoji.createdAt);
+                statement.setLong(18, emoji.updatedAt);
                 statement.executeUpdate();
             }
         }
@@ -241,6 +246,96 @@ public class AiEmojiStore {
         }
     }
 
+    public void updateAiTags(String emojiId,
+                             String aiTags,
+                             String tagStatus,
+                             long updatedAt) throws Exception {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_emoji SET ai_tags = ?, tag_status = ?, "
+                            + "tag_updated_at = ?, updated_at = ? "
+                            + "WHERE emoji_id = ?")) {
+                statement.setString(1, aiTags == null ? "[]" : aiTags);
+                statement.setString(2, tagStatus == null
+                        ? "none" : tagStatus);
+                statement.setLong(3, updatedAt);
+                statement.setLong(4, updatedAt);
+                statement.setString(5, emojiId);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public void markUsed(String emojiId, long usedAt) throws Exception {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE ai_emoji SET last_used_at = ? "
+                            + "WHERE emoji_id = ?")) {
+                statement.setLong(1, usedAt);
+                statement.setString(2, emojiId);
+                statement.executeUpdate();
+            }
+        }
+    }
+
+    public int countAll() throws Exception {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT COUNT(*) FROM ai_emoji");
+                 ResultSet result = statement.executeQuery()) {
+                return result.next() ? result.getInt(1) : 0;
+            }
+        }
+    }
+
+    public int countUserImportsSince(long since) throws Exception {
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT COUNT(*) FROM ai_emoji "
+                            + "WHERE source = 'user' AND created_at >= ?")) {
+                statement.setLong(1, since);
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next() ? result.getInt(1) : 0;
+                }
+            }
+        }
+    }
+
+    /**
+     * 超出库上限时优先淘汰最久未使用/最早创建的表情。
+     */
+    public int enforceLibraryLimit(int max) throws Exception {
+        int limit = Math.max(1, max);
+        int total = countAll();
+        if (total <= limit) {
+            return 0;
+        }
+        List<String> ids = new ArrayList<>();
+        synchronized (database) {
+            Connection connection = database.connection();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT emoji_id FROM ai_emoji "
+                            + "ORDER BY CASE WHEN last_used_at > 0 "
+                            + "THEN last_used_at ELSE created_at END ASC, "
+                            + "created_at ASC LIMIT ?")) {
+                statement.setInt(1, total - limit);
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        ids.add(result.getString("emoji_id"));
+                    }
+                }
+            }
+        }
+        for (String id : ids) {
+            delete(id);
+        }
+        return ids.size();
+    }
+
     public void delete(String emojiId) throws Exception {
         AiEmoji emoji = findByEmojiId(emojiId);
         synchronized (database) {
@@ -312,6 +407,14 @@ public class AiEmojiStore {
         emoji.size = result.getLong("size");
         emoji.path = result.getString("path");
         emoji.tags = result.getString("tags");
+        String aiTags = result.getString("ai_tags");
+        emoji.aiTags = aiTags == null || aiTags.trim().isEmpty()
+                ? "[]" : aiTags;
+        String tagStatus = result.getString("tag_status");
+        emoji.tagStatus = tagStatus == null || tagStatus.trim().isEmpty()
+                ? "none" : tagStatus.trim();
+        emoji.tagUpdatedAt = result.getLong("tag_updated_at");
+        emoji.lastUsedAt = result.getLong("last_used_at");
         emoji.enabled = result.getInt("enabled") == 1;
         String reviewStatus = result.getString("review_status");
         emoji.reviewStatus = reviewStatus == null
@@ -345,6 +448,10 @@ public class AiEmojiStore {
             return "image/jpeg";
         }
         return "image/png";
+    }
+
+    public static String hash(byte[] bytes) throws Exception {
+        return sha256(bytes);
     }
 
     private static String sha256(byte[] bytes) throws Exception {

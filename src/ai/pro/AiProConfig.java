@@ -113,8 +113,6 @@ public final class AiProConfig {
         put("ai.pro.emoji.skipReview", "false");
         put("ai.pro.emoji.cooldownRounds", "0");
         put("ai.pro.emoji.maxConsecutive", "3");
-        put("ai.pro.emoji.topCandidates", "3");
-        put("ai.pro.emoji.candidatePool", "50");
         put("ai.pro.emoji.libraryMax", "100");
         put("ai.pro.emoji.randomCandidates", "5");
         put("ai.pro.emoji.dailyImportMax", "20");
@@ -315,8 +313,6 @@ public final class AiProConfig {
 
         requireInt("ai.pro.emoji.cooldownRounds", 0, 10000);
         requireInt("ai.pro.emoji.maxConsecutive", 1, 10);
-        requireInt("ai.pro.emoji.topCandidates", 1, 50);
-        requireInt("ai.pro.emoji.candidatePool", 1, 10000);
         requireInt("ai.pro.emoji.libraryMax", 1, 10000);
         requireInt("ai.pro.emoji.randomCandidates", 1, 50);
         requireInt("ai.pro.emoji.dailyImportMax", 0, 10000);

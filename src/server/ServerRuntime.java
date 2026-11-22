@@ -154,6 +154,7 @@ public final class ServerRuntime {
                 ai.pro.AiProResponder pro = (ai.pro.AiProResponder) responder;
                 aiProAdminService.setIndexRebuilder(pro::rebuildMemoryIndex);
                 aiProAdminService.setEmotionResetter(pro::resetEmotion);
+                aiProAdminService.setEmojiService(pro.getEmojiService());
             }
             chatServer.setAiResponder(responder);
             chatServer.start();
