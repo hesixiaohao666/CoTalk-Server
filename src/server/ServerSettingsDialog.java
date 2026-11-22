@@ -397,8 +397,8 @@ public class ServerSettingsDialog extends JDialog {
         fields.add(title, BorderLayout.NORTH);
         fields.add(new JScrollPane(content), BorderLayout.CENTER);
         fields.add(new JLabel("标题 1–" + runtime.getConfig().announcementMaxTitle
-                + " 字符，正文 1–"
-                + runtime.getConfig().announcementMaxContent + " 字符"),
+                        + " 字符，正文 1–"
+                        + runtime.getConfig().announcementMaxContent + " 字符"),
                 BorderLayout.SOUTH);
         panel.add(fields, BorderLayout.CENTER);
 
@@ -446,7 +446,11 @@ public class ServerSettingsDialog extends JDialog {
                         + "数据存储：SQLite\n"
                         + "网络通信：TCP Socket (NDJSON)"), null);
         addRow(panel, row++, "更新日志", readOnlyArea(
-                "版本：0.4.0(beta)\n"
+                "版本：0.4.1(beta)\n"
+                        + "更新时间：2026-11-22\n"
+                        + "- 修复了一些已知问题，优化了服务端流畅与稳定性\n"
+                        + "- 此次更新兼容 v0.4.0(beta) 的客户端\n"
+                        + "版本：0.4.0(beta)\n"
                         + "更新时间：2026-11-22\n"
                         + "- 身份验证系统正式实装：废除原随机临时 UUID 逻辑，全面使用身份验证系统作为唯一准入标准\n"
                         + "- 管理员模式正式实装：新增成员禁言与全员禁言功能，禁言期间 AI 全局静默，新增退出群聊校验\n"
