@@ -94,7 +94,6 @@ public final class ServerConfigStore {
             }
             newKeysMissing = !loaded.containsKey("ai.keywords")
                     || !loaded.containsKey("ai.keywordChance")
-                    || !loaded.containsKey("ai.randomChance")
                     || !loaded.containsKey("ai.peakChance")
                     || !loaded.containsKey("ai.offPeakChance")
                     || !loaded.containsKey("ai.peak.timezone")
@@ -130,10 +129,6 @@ public final class ServerConfigStore {
             if (!loaded.containsKey("config.version")) {
                 // v0.2.1 早期默认值：随机 5%、3 条、每条 20 字。
                 // 未自定义的旧文件在这里统一升级到 20%、5 条、30 字。
-                if ("5".equals(loaded.getProperty(
-                        "ai.randomChance", "").trim())) {
-                    merged.setProperty("ai.randomChance", "20");
-                }
                 if ("3".equals(loaded.getProperty(
                         "ai.maxMessages", "").trim())) {
                     merged.setProperty("ai.maxMessages", "5");
@@ -299,7 +294,6 @@ public final class ServerConfigStore {
             throw new IllegalArgumentException("AI 消息条数/字数配置非法");
         }
         if (config.aiKeywordChance < 0 || config.aiKeywordChance > 100
-                || config.aiRandomChance < 0 || config.aiRandomChance > 100
                 || config.aiPeakChance < 0 || config.aiPeakChance > 100
                 || config.aiOffPeakChance < 0
                 || config.aiOffPeakChance > 100) {
@@ -391,7 +385,6 @@ public final class ServerConfigStore {
                 write(writer, properties, "ai.mentions");
                 write(writer, properties, "ai.keywords");
                 write(writer, properties, "ai.keywordChance");
-                write(writer, properties, "ai.randomChance");
                 write(writer, properties, "ai.peakChance");
                 write(writer, properties, "ai.offPeakChance");
                 write(writer, properties, "ai.peak.timezone");

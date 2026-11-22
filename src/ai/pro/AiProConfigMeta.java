@@ -48,10 +48,6 @@ public final class AiProConfigMeta {
                 "0 表示使用基础请求超时");
         integer("prompt.contextMessages", "AI 上下文条数", GROUP_BASIC,
                 1, 200, "条", "");
-        integer("prompt.maxChars", "AI 提示词上限", GROUP_BASIC,
-                500, 100000, "字符", "");
-        integer("prompt.maxMemoryChars", "AI 记忆预算", GROUP_BASIC,
-                0, 100000, "字符", "");
         bool("trigger.systemMessages", "系统消息可触发回复", GROUP_BASIC,
                 "系统消息按概率触发 AI 主动回复", true);
         bool("trigger.images", "图片消息可触发回复", GROUP_BASIC,
@@ -60,8 +56,6 @@ public final class AiProConfigMeta {
                 "逗号分隔，可留空");
         bool("migrate.importHistory", "迁移历史消息", GROUP_BASIC,
                 "首次启用 AI 时导入历史消息", true);
-        bool("migrate.backup", "迁移前备份", GROUP_BASIC,
-                "迁移前备份旧记忆数据", true);
         integer("round.intervalMs", "轮次间隔", GROUP_BASIC, 1000,
                 Integer.MAX_VALUE, "毫秒",
                 "默认 1200000（20 分钟）");
@@ -169,8 +163,6 @@ public final class AiProConfigMeta {
                 "收到用户表情时自动收集", true);
         bool("emoji.skipReview", "无需管理员审核", GROUP_EMOJI,
                 "开启后新表情直接可用；关闭时先进入待审核", true);
-        integer("emoji.cooldownRounds", "表情冷却轮次", GROUP_EMOJI,
-                0, 10000, "轮", "兼容配置；v0.3.7 起不再限制发送轮数");
         integer("emoji.maxConsecutive", "单次最多连续表情", GROUP_EMOJI,
                 1, 3, "个", "最多 3 个，超出忽略");
         integer("emoji.libraryMax", "表情库上限", GROUP_EMOJI,

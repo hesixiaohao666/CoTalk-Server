@@ -52,7 +52,7 @@ public class ServerSettingsDialog extends JDialog {
     private final JCheckBox pushEnabledCheck = new JCheckBox("启用后台推送");
 
     private final JCheckBox adminEnabledCheck =
-            new JCheckBox("启用管理员模式（实验性功能）");
+            new JCheckBox("启用管理员模式");
     private final JPasswordField adminKeyField = new JPasswordField(24);
     private final JCheckBox showAdminKey = new JCheckBox("显示");
     private final JButton generateAdminKeyButton = new JButton("生成随机");
@@ -71,7 +71,6 @@ public class ServerSettingsDialog extends JDialog {
     private final JTextField aiMentionsField = new JTextField(24);
     private final JTextField aiKeywordsField = new JTextField(24);
     private final JTextField aiKeywordChanceField = new JTextField(8);
-    private final JTextField aiRandomChanceField = new JTextField(8);
     private final JTextField aiPeakChanceField = new JTextField(8);
     private final JTextField aiOffPeakChanceField = new JTextField(8);
     private final JTextField aiPeakTimezoneField = new JTextField(20);
@@ -272,8 +271,6 @@ public class ServerSettingsDialog extends JDialog {
                 "例如 MON-FRI");
         addRow(form, row++, "峰时时段", aiPeakPeriodsField,
                 "例如 09:00-12:00,14:00-18:00");
-        addRow(form, row++, "旧随机概率（兼容）", aiRandomChanceField,
-                "新逻辑优先使用峰时/谷时概率");
 
         aiForcedPromptArea.setLineWrap(true);
         aiForcedPromptArea.setWrapStyleWord(true);
@@ -384,8 +381,6 @@ public class ServerSettingsDialog extends JDialog {
         }
 
         addNote(panel, row++,
-                "管理员模式为实验性功能。");
-        addNote(panel, row++,
                 "管理员密钥仅保存加密校验值，不会明文写入配置文件。");
         addNote(panel, row++,
                 "生成新密钥后请立即复制保存；保存配置后将不再显示明文。");
@@ -470,18 +465,22 @@ public class ServerSettingsDialog extends JDialog {
                         + "数据存储：SQLite\n"
                         + "网络通信：TCP Socket (NDJSON)"), null);
         addRow(panel, row++, "更新日志", readOnlyArea(
-                "版本：0.3.7(beta)\n"
-                        + "更新时间：2026-11-19\n"
-                        + "【常规更新】\n"
-                        + "- 新增独立的文件日志系统，按日期归档并保留 30 天\n"
-                        + "- 支持表情包的 GIF 格式发送\n"
-                        + "- 此次更新不兼容旧版本的客户端与服务端，请及时进行更新\n"
-                        + "【实验性功能更新】\n"
-                        + "- 新增全新的群聊身份验证系统，信息由服务端安全保存\n"
-                        + "- 新增入群审核机制、成员管理页面和移除用户功能\n"
-                        + "- 新增成员列表显示在线状态与用户名\n"
-                        + "- 实装客户端管理员强制撤回接口\n"
-                        + "- AI 群友 Pro 支持系统消息、图片消息的触发\n"), null);
+                "版本：0.4.0(beta)\n"
+                        + "更新时间：2026-11-22\n"
+                        + "【启动与身份】\n"
+                        + "- 客户端改用本地档案启动，移除本地账号登录\n"
+                        + "- 每个服务器独立注册或登录群聊身份，支持入群审核\n"
+                        + "- 支持退出群聊并清理当前房间数据\n"
+                        + "【聊天与管理】\n"
+                        + "- 支持消息回复与引用，引用撤回显示提示\n"
+                        + "- 断线重连后自动同步最近 7 天聊天记录\n"
+                        + "- 新增禁言、全员禁言、成员管理与公告推送\n"
+                        + "【AI 群友】\n"
+                        + "- 统一为 AI 群友，支持 @AI、上下文、记忆与表情\n"
+                        + "- 支持引用理解、表情标签、学习概率与库上限\n"
+                        + "【其他】\n"
+                        + "- 新增版本更新提示与服务端公告\n"
+                        + "- 本次更新与 0.3.x 版本不兼容\n"), null);
         addRow(panel, row++, "开发信息", readOnlyArea(
                 "作者：何似小浩\n"
                         + "开源仓库：\n"
@@ -600,7 +599,7 @@ public class ServerSettingsDialog extends JDialog {
                 adminKeyField,
                 apiKeyField, aiModelField, aiBaseUrlField, aiNameField,
                 aiMentionsField, aiKeywordsField, aiKeywordChanceField,
-                aiRandomChanceField, aiPeakChanceField,
+                aiPeakChanceField,
                 aiOffPeakChanceField, aiPeakTimezoneField,
                 aiPeakDaysField, aiPeakPeriodsField,
                 aiAvatarField, aiCooldownField,
@@ -664,7 +663,6 @@ public class ServerSettingsDialog extends JDialog {
         aiMentionsField.setText(original.aiMentions);
         aiKeywordsField.setText(original.aiKeywords);
         aiKeywordChanceField.setText(String.valueOf(original.aiKeywordChance));
-        aiRandomChanceField.setText(String.valueOf(original.aiRandomChance));
         aiPeakChanceField.setText(String.valueOf(original.aiPeakChance));
         aiOffPeakChanceField.setText(String.valueOf(original.aiOffPeakChance));
         aiPeakTimezoneField.setText(original.aiPeakTimezone);
@@ -886,9 +884,6 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("ai.keywordChance",
                 String.valueOf(readChance(aiKeywordChanceField,
                         "关键词概率")));
-        properties.setProperty("ai.randomChance",
-                String.valueOf(readChance(aiRandomChanceField,
-                        "旧随机参与概率")));
         properties.setProperty("ai.peakChance",
                 String.valueOf(readChance(aiPeakChanceField,
                         "峰时参与概率")));

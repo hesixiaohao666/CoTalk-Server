@@ -312,9 +312,6 @@ public final class ServerRuntime {
         config.adminIterations = saved.adminIterations;
         config.adminVerifier = saved.adminVerifier;
         events.onLog("管理员认证配置已即时更新");
-        if (chatServer != null) {
-            chatServer.revokeAllAdmins("管理员密钥已刷新");
-        }
         return true;
     }
 

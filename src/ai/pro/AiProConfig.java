@@ -19,15 +19,12 @@ public final class AiProConfig {
         put("ai.pro.maxTokens", "0");
         put("ai.pro.timeoutMs", "0");
         put("ai.pro.prompt.contextMessages", "10");
-        put("ai.pro.prompt.maxChars", "6000");
-        put("ai.pro.prompt.maxMemoryChars", "1200");
         put("ai.pro.time.enabled", "true");
         put("ai.pro.time.timezone", "");
         put("ai.pro.trigger.systemMessages", "true");
         put("ai.pro.trigger.images", "true");
         put("ai.pro.owner.names", "");
         put("ai.pro.migrate.importHistory", "false");
-        put("ai.pro.migrate.backup", "true");
 
         put("ai.pro.round.intervalMs", "1200000");
         put("ai.pro.round.messageCount", "10");
@@ -111,7 +108,6 @@ public final class AiProConfig {
         put("ai.pro.emoji.enabled", "true");
         put("ai.pro.emoji.autoImport", "true");
         put("ai.pro.emoji.skipReview", "false");
-        put("ai.pro.emoji.cooldownRounds", "0");
         put("ai.pro.emoji.maxConsecutive", "3");
         put("ai.pro.emoji.libraryMax", "100");
         put("ai.pro.emoji.randomCandidates", "5");
@@ -235,8 +231,6 @@ public final class AiProConfig {
         requireInt("ai.pro.maxTokens", 0, Integer.MAX_VALUE);
         requireInt("ai.pro.timeoutMs", 0, Integer.MAX_VALUE);
         requireInt("ai.pro.prompt.contextMessages", 1, 200);
-        requireInt("ai.pro.prompt.maxChars", 500, 100000);
-        requireInt("ai.pro.prompt.maxMemoryChars", 0, 100000);
         requireOptionalZone("ai.pro.time.timezone");
 
         requireInt("ai.pro.round.intervalMs", 1000, Integer.MAX_VALUE);
@@ -311,8 +305,7 @@ public final class AiProConfig {
         requireDouble("ai.pro.emotion.memoryBaselineWeight", 0.0, 1.0);
         requireDouble("ai.pro.emotion.promptMaxIntensity", 0.0, 1.0);
 
-        requireInt("ai.pro.emoji.cooldownRounds", 0, 10000);
-        requireInt("ai.pro.emoji.maxConsecutive", 1, 10);
+        requireInt("ai.pro.emoji.maxConsecutive", 1, 3);
         requireInt("ai.pro.emoji.libraryMax", 1, 10000);
         requireInt("ai.pro.emoji.randomCandidates", 1, 50);
         requireInt("ai.pro.emoji.dailyImportMax", 0, 10000);

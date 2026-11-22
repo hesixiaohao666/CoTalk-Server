@@ -66,7 +66,6 @@ public class ServerConfig {
     public final String aiMentions;
     public final String aiKeywords;
     public final int aiKeywordChance;
-    public final int aiRandomChance;
     public final int aiPeakChance;
     public final int aiOffPeakChance;
     public final String aiPeakTimezone;
@@ -158,7 +157,6 @@ public class ServerConfig {
         aiMentions = value(properties, "ai.mentions", "@大肥鱼,@AI");
         aiKeywords = value(properties, "ai.keywords", "大肥鱼,鱼,AI");
         aiKeywordChance = intValue(properties, "ai.keywordChance", 95);
-        aiRandomChance = intValue(properties, "ai.randomChance", 20);
         aiPeakChance = intValue(properties, "ai.peakChance", 20);
         aiOffPeakChance = intValue(properties, "ai.offPeakChance", 60);
         aiPeakTimezone = value(properties, "ai.peak.timezone", "");
@@ -239,7 +237,6 @@ public class ServerConfig {
         properties.setProperty("ai.mentions", "@大肥鱼,@AI");
         properties.setProperty("ai.keywords", "大肥鱼,鱼,AI");
         properties.setProperty("ai.keywordChance", "95");
-        properties.setProperty("ai.randomChance", "20");
         properties.setProperty("ai.peakChance", "20");
         properties.setProperty("ai.offPeakChance", "60");
         properties.setProperty("ai.peak.timezone", "");
@@ -331,7 +328,6 @@ public class ServerConfig {
         properties.setProperty("ai.mentions", aiMentions);
         properties.setProperty("ai.keywords", aiKeywords);
         properties.setProperty("ai.keywordChance", String.valueOf(aiKeywordChance));
-        properties.setProperty("ai.randomChance", String.valueOf(aiRandomChance));
         properties.setProperty("ai.peakChance", String.valueOf(aiPeakChance));
         properties.setProperty("ai.offPeakChance",
                 String.valueOf(aiOffPeakChance));
