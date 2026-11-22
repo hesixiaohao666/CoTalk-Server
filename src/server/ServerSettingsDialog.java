@@ -1,6 +1,5 @@
 package server;
 
-import ai.AiPrompts;
 import ai.AiSchedule;
 
 import javax.swing.*;
@@ -78,8 +77,6 @@ public class ServerSettingsDialog extends JDialog {
     private final JTextField aiPeakPeriodsField = new JTextField(32);
     private final JTextField aiAvatarField = new JTextField(24);
     private final JButton browseAvatarButton = new JButton("浏览…");
-    private final JTextArea aiForcedPromptArea = new JTextArea(5, 36);
-    private final JTextArea aiPromptArea = new JTextArea(5, 36);
     private final JTextField aiCooldownField = new JTextField(10);
     private final JTextField aiMaxContextField = new JTextField(10);
     private final JTextField aiTimeoutField = new JTextField(10);
@@ -229,17 +226,6 @@ public class ServerSettingsDialog extends JDialog {
         JPanel form = formPanel();
         int row = 0;
 
-        JButton dataManager = new JButton("打开 AI 数据管理");
-        dataManager.addActionListener(e -> openAiDataManager());
-        dataManager.setEnabled(aiProAdminService != null);
-        addRow(form, row++, "AI 数据管理", dataManager,
-                "记忆、情绪、表情、待办、核心提示词与导入导出");
-
-        JButton advanced = new JButton("打开高级选项");
-        advanced.addActionListener(e -> openAiAdvanced());
-        addRow(form, row++, "AI 高级选项", advanced,
-                "轮次、记忆、情绪、表情、待办、搜索等参数");
-
         addRow(form, row++, "AI 开关", aiEnabledCheck,
                 "关闭或未填写 API Key 时不会出现 AI 成员");
         JPanel apiRow = new JPanel(new BorderLayout(6, 0));
@@ -260,6 +246,10 @@ public class ServerSettingsDialog extends JDialog {
         avatarRow.add(browseAvatarButton, BorderLayout.EAST);
         addRow(form, row++, "AI 头像", avatarRow, "PNG/JPG 路径");
 
+        addRow(form, row++, "AI 识图", aiVisionCheck,
+                "关闭后只保留图片/表情的文字描述");
+        addRow(form, row++, "读取系统消息", aiSystemMessagesCheck,
+                "加入/退出/撤回/拍一拍/广播等");
         addRow(form, row++, "@ 触发词", aiMentionsField, "逗号分隔");
         addRow(form, row++, "参与关键词", aiKeywordsField, "如：大肥鱼,鱼,AI");
         addRow(form, row++, "关键词概率", aiKeywordChanceField, "0–100");
@@ -271,35 +261,26 @@ public class ServerSettingsDialog extends JDialog {
                 "例如 MON-FRI");
         addRow(form, row++, "峰时时段", aiPeakPeriodsField,
                 "例如 09:00-12:00,14:00-18:00");
-
-        aiForcedPromptArea.setLineWrap(true);
-        aiForcedPromptArea.setWrapStyleWord(true);
-        aiForcedPromptArea.setEditable(false);
-        aiForcedPromptArea.setBackground(new Color(0xF2F2F2));
-        JScrollPane forcedPromptScroll = new JScrollPane(aiForcedPromptArea);
-        forcedPromptScroll.setPreferredSize(new Dimension(420, 90));
-        addRow(form, row++, "强制提示词", forcedPromptScroll,
-                "由程序固定，不可修改");
-
-        aiPromptArea.setLineWrap(true);
-        aiPromptArea.setWrapStyleWord(true);
-        JScrollPane promptScroll = new JScrollPane(aiPromptArea);
-        promptScroll.setPreferredSize(new Dimension(420, 90));
-        addRow(form, row++, "自定义提示词", promptScroll,
-                "用于 AI 的人设和表达风格");
         addRow(form, row++, "上下文条数", aiMaxContextField,
                 "基础上下文条数");
-
-        addRow(form, row++, "AI 识图", aiVisionCheck,
-                "关闭后只保留图片/表情的文字描述");
-        addRow(form, row++, "读取系统消息", aiSystemMessagesCheck,
-                "加入/退出/撤回/拍一拍/广播等");
         addRow(form, row++, "回复冷却", aiCooldownField, "毫秒");
         addRow(form, row++, "请求超时", aiTimeoutField, "毫秒");
         addRow(form, row++, "maxTokens", aiMaxTokensField, null);
         addRow(form, row++, "单条最大字符", aiMessageMaxCharsField, "默认 30");
         addRow(form, row++, "单次最大条数", aiMaxMessagesField, "默认 5，最多 10");
         addRow(form, row++, "多条间隔", aiReplyDelayField, "毫秒，默认 600");
+
+        JButton dataManager = new JButton("打开 AI 数据管理");
+        dataManager.addActionListener(e -> openAiDataManager());
+        dataManager.setEnabled(aiProAdminService != null);
+        addRow(form, row++, "AI 数据管理", dataManager,
+                "记忆、情绪、表情、待办、核心提示词与导入导出");
+
+        JButton advanced = new JButton("打开高级选项");
+        advanced.addActionListener(e -> openAiAdvanced());
+        addRow(form, row++, "AI 高级选项", advanced,
+                "轮次、记忆、情绪、表情、待办、搜索等参数");
+
         addNote(form, row++,
                 "被 @ 时必须回复；关键词和峰时/谷时随机参与按概率触发，"
                         + "峰时由程序按服务器本地时区判断。"
@@ -669,10 +650,6 @@ public class ServerSettingsDialog extends JDialog {
         aiPeakDaysField.setText(original.aiPeakDays);
         aiPeakPeriodsField.setText(original.aiPeakPeriods);
         aiAvatarField.setText(original.aiAvatar);
-        aiForcedPromptArea.setText(AiPrompts.FORCED_PROMPT);
-        aiForcedPromptArea.setCaretPosition(0);
-        aiPromptArea.setText(original.aiPromptCustom);
-        aiPromptArea.setCaretPosition(0);
         aiCooldownField.setText(String.valueOf(original.aiCooldownMs));
         aiMaxContextField.setText(String.valueOf(original.aiMaxContext));
         aiTimeoutField.setText(String.valueOf(original.aiTimeoutMs));
@@ -909,7 +886,6 @@ public class ServerSettingsDialog extends JDialog {
         properties.setProperty("ai.peak.days", peakDays);
         properties.setProperty("ai.peak.periods", peakPeriods);
         properties.setProperty("ai.avatar", text(aiAvatarField));
-        properties.setProperty("ai.prompt.custom", aiPromptArea.getText().trim());
         properties.setProperty("ai.cooldownMs",
                 String.valueOf(readInt(aiCooldownField, "回复冷却")));
         properties.setProperty("ai.maxContext",

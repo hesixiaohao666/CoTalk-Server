@@ -137,6 +137,7 @@ public class ChatServer implements AiReplySink {
         if (!config.adminEnabled) {
             return false;
         }
+        boolean changed = roomService.getRoom().muteAll != muteAll;
         roomService.getRoom().muteAll = muteAll;
         try {
             if (roomStore != null) {
@@ -147,6 +148,11 @@ public class ChatServer implements AiReplySink {
         }
         events.onLog((muteAll ? "[全员禁言] 开启" : "[全员禁言] 关闭")
                 + " 操作者=" + operator);
+        if (changed) {
+            broadcastSystemMessage(
+                    muteAll ? "管理员开启了全员禁言" : "管理员关闭了全员禁言",
+                    false);
+        }
         broadcastRoomUpdate();
         broadcastMemberList();
         return true;

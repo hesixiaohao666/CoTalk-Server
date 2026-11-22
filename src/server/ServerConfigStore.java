@@ -381,7 +381,6 @@ public final class ServerConfigStore {
                 write(writer, properties, "ai.thinking");
                 write(writer, properties, "ai.vision");
                 write(writer, properties, "ai.systemMessages");
-                write(writer, properties, "ai.prompt.custom");
                 write(writer, properties, "ai.mentions");
                 write(writer, properties, "ai.keywords");
                 write(writer, properties, "ai.keywordChance");

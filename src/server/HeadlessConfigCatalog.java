@@ -121,7 +121,6 @@ public final class HeadlessConfigCatalog {
         bool("ai.thinking", "启用思考模式", GROUP_AI);
         bool("ai.vision", "允许 AI 识图", GROUP_AI);
         bool("ai.systemMessages", "允许 AI 读取系统消息", GROUP_AI);
-        text("ai.prompt.custom", "自定义提示词", GROUP_AI, "", false, true);
         text("ai.mentions", "AI @ 触发词", GROUP_AI, "逗号分隔", false, true);
         text("ai.keywords", "AI 参与关键词", GROUP_AI, "逗号分隔", false, true);
         chance("ai.keywordChance", "关键词回复概率");

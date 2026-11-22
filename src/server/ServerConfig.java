@@ -233,7 +233,6 @@ public class ServerConfig {
         properties.setProperty("ai.thinking", "false");
         properties.setProperty("ai.vision", "true");
         properties.setProperty("ai.systemMessages", "true");
-        properties.setProperty("ai.prompt.custom", AiPrompts.DEFAULT_CUSTOM_PROMPT);
         properties.setProperty("ai.mentions", "@大肥鱼,@AI");
         properties.setProperty("ai.keywords", "大肥鱼,鱼,AI");
         properties.setProperty("ai.keywordChance", "95");
@@ -324,7 +323,6 @@ public class ServerConfig {
         properties.setProperty("ai.thinking", String.valueOf(aiThinking));
         properties.setProperty("ai.vision", String.valueOf(aiVision));
         properties.setProperty("ai.systemMessages", String.valueOf(aiSystemMessages));
-        properties.setProperty("ai.prompt.custom", aiPromptCustom);
         properties.setProperty("ai.mentions", aiMentions);
         properties.setProperty("ai.keywords", aiKeywords);
         properties.setProperty("ai.keywordChance", String.valueOf(aiKeywordChance));
